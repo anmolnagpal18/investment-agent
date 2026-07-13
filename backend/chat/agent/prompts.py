@@ -133,7 +133,7 @@ REPORT_HTML_TEMPLATE = """
             break-after: page;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: flex-start;
             background: white;
             box-sizing: border-box;
         }}
@@ -166,7 +166,7 @@ REPORT_HTML_TEMPLATE = """
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 16px;
+            margin-bottom: 24px;
             padding-bottom: 10px;
             border-bottom: 2px solid #3B82F6;
         }}
