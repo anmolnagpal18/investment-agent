@@ -126,7 +126,7 @@ REPORT_HTML_TEMPLATE = """
         }}
         .page {{
             width: 210mm;
-            height: 296mm; /* A4 height with safety margin to prevent sub-pixel page overflows */
+            min-height: 296mm; /* Allow page to grow naturally if content overflows, preventing overflow clipping */
             padding: 16mm; /* Exact physical A4 page margin */
             position: relative;
             page-break-after: always;
@@ -330,10 +330,10 @@ REPORT_HTML_TEMPLATE = """
 </div>
 </div>
 
-<!-- PAGE 2: EXECUTIVE SUMMARY -->
+<!-- PAGE 2: EXECUTIVE SUMMARY & COMPANY OVERVIEW -->
 <div class="page">
-<div class="section-header"><h2>Executive Summary</h2><span class="section-badge">Page 2 of 8</span></div>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+<div class="section-header"><h2>Executive Summary &amp; Company Overview</h2><span class="section-badge">Page 2 of 8</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">
   <div class="metric-card blue"><div class="label">AI Score</div><div class="value">{ai_score}<span style="font-size:9pt;font-weight:500;color:#64748B;">/100</span></div><div class="sub">Weighted composite</div></div>
   <div class="metric-card green"><div class="label">Recommendation</div><div class="value" style="font-size:16pt;">{recommendation}</div><div class="sub">Based on 5 dimensions</div></div>
   <div class="metric-card purple"><div class="label">Confidence</div><div class="value">{confidence}%</div><div class="sub">Statistical certainty</div></div>
@@ -341,20 +341,14 @@ REPORT_HTML_TEMPLATE = """
   <div class="metric-card teal"><div class="label">Investment Horizon</div><div class="value" style="font-size:11pt;padding-top:3px;">{horizon}</div><div class="sub">Recommended holding period</div></div>
   <div class="metric-card red"><div class="label">News Sentiment</div><div class="value">{score_sentiment}<span style="font-size:9pt;font-weight:500;color:#64748B;">/100</span></div><div class="sub">Media &amp; press coverage</div></div>
 </div>
-<div class="card"><h3 style="color:#3B82F6;">Investment Thesis</h3><p style="font-size:9.5pt;">{explanation}</p></div>
-<div class="two-col">
+<div class="card" style="margin-bottom:14px;"><h3 style="color:#3B82F6;">Investment Thesis</h3><p style="font-size:9.5pt;">{explanation}</p></div>
+<div class="two-col" style="margin-bottom:14px;">
   <div class="card" style="margin-bottom:0;"><h3 style="color:#10B981;">✅ Top Reasons to Invest</h3><ul class="reason-list">{top_reasons}</ul></div>
   <div class="card" style="margin-bottom:0;"><h3 style="color:#EF4444;">⚠ Key Risks</h3><ul class="reason-list">{major_risks}</ul></div>
 </div>
-<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 2 of 8</span><span>Investment Research Report</span></div>
-</div>
-
-<!-- PAGE 3: COMPANY OVERVIEW -->
-<div class="page">
-<div class="section-header"><h2>Company Overview</h2><span class="section-badge">Page 3 of 8</span></div>
-<div class="card" style="margin-bottom:14px;"><h3>{name}</h3><p style="font-size:9.5pt;line-height:1.7;word-wrap:break-word;">{description}</p></div>
-<h3 style="margin-bottom:10px;">Company Metadata</h3>
-<table class="data-table">
+<div class="card" style="margin-bottom:14px;"><h3>{name}</h3><p style="font-size:9.5pt;line-height:1.6;word-wrap:break-word;">{description}</p></div>
+<h3 style="margin-bottom:8px;">Company Metadata</h3>
+<table class="data-table" style="margin-bottom:0;">
   <tbody>
     <tr><td style="width:22%;font-weight:700;color:#475569;">Ticker</td><td>{ticker}</td><td style="width:22%;font-weight:700;color:#475569;">Sector</td><td>{sector}</td></tr>
     <tr><td style="font-weight:700;color:#475569;">Industry</td><td style="word-wrap:break-word;">{industry}</td><td style="font-weight:700;color:#475569;">Exchange</td><td>{exchange}</td></tr>
@@ -363,20 +357,21 @@ REPORT_HTML_TEMPLATE = """
     <tr><td style="font-weight:700;color:#475569;">Market Cap</td><td>{market_cap_fmt}</td><td style="font-weight:700;color:#475569;">Website</td><td style="word-wrap:break-word;overflow-wrap:anywhere;">{website}</td></tr>
   </tbody>
 </table>
-<h3 style="margin:14px 0 10px;">Report Metadata</h3>
-<table class="data-table">
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 2 of 8</span><span>Investment Research Report</span></div>
+</div>
+
+<!-- PAGE 3: REPORT METADATA & FINANCIAL SCORES -->
+<div class="page">
+<div class="section-header"><h2>Report details &amp; Financial health</h2><span class="section-badge">Page 3 of 8</span></div>
+<h3 style="margin-bottom:8px;">Report Metadata</h3>
+<table class="data-table" style="margin-bottom:14px;">
   <tbody>
     <tr><td style="width:22%;font-weight:700;color:#475569;">Report ID</td><td colspan="3" style="word-wrap:break-word;font-family:monospace;font-size:8pt;">{report_id}</td></tr>
     <tr><td style="font-weight:700;color:#475569;">Model</td><td>Gemini 2.5 Flash</td><td style="font-weight:700;color:#475569;">Data Source</td><td>Yahoo Finance</td></tr>
     <tr><td style="font-weight:700;color:#475569;">Pipeline</td><td>LangGraph 10-Node</td><td style="font-weight:700;color:#475569;">Generated</td><td>{generated_at}</td></tr>
   </tbody>
 </table>
-<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 3 of 8</span><span>Investment Research Report</span></div>
-</div>
-
-<!-- PAGE 4: FINANCIAL HIGHLIGHTS -->
-<div class="page">
-<div class="section-header"><h2>Financial Highlights</h2><span class="section-badge">Page 4 of 8</span></div>
+<h3 style="margin-bottom:8px;">Financial Scores</h3>
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
   <div class="metric-card blue"><div class="label">Financial Health</div><div class="value">{score_health}<span style="font-size:9pt;color:#64748B;">/100</span></div><div class="sub">Liquidity &amp; solvency</div></div>
   <div class="metric-card green"><div class="label">Growth Score</div><div class="value">{score_growth}<span style="font-size:9pt;color:#64748B;">/100</span></div><div class="sub">YoY revenue &amp; earnings</div></div>
@@ -385,8 +380,8 @@ REPORT_HTML_TEMPLATE = """
   <div class="metric-card purple"><div class="label">ROE</div><div class="value">{roe_fmt}</div><div class="sub">Return on equity</div></div>
   <div class="metric-card teal"><div class="label">Operating Margin</div><div class="value">{op_margin_fmt}</div><div class="sub">Operating efficiency</div></div>
 </div>
-<h3 style="margin-bottom:10px;">Key Financial Ratios</h3>
-<table class="data-table">
+<h3 style="margin-bottom:8px;">Key Financial Ratios</h3>
+<table class="data-table" style="margin-bottom:14px;">
   <thead><tr><th>Metric</th><th>Value</th><th>Metric</th><th>Value</th></tr></thead>
   <tbody>
     <tr><td>Revenue Growth (YoY)</td><td class="num">{rev_growth_fmt}</td><td>Net Profit Margin</td><td class="num">{net_margin_fmt}</td></tr>
@@ -396,19 +391,19 @@ REPORT_HTML_TEMPLATE = """
     <tr><td>Price-to-Book (P/B)</td><td class="num">{pb_fmt}</td><td>Price-to-Sales (P/S)</td><td class="num">{ps_fmt}</td></tr>
   </tbody>
 </table>
-<h3 style="margin:14px 0 10px;">Score Breakdown</h3>
+<h3 style="margin-bottom:8px;">Score Breakdown</h3>
 <div class="score-row"><span class="name">Financial Health</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_health}%;background:#3B82F6;"></div></div><span class="num" style="color:#3B82F6;">{score_health}/100</span></div>
 <div class="score-row"><span class="name">Growth</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_growth}%;background:#8B5CF6;"></div></div><span class="num" style="color:#8B5CF6;">{score_growth}/100</span></div>
 <div class="score-row"><span class="name">Valuation</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_valuation}%;background:#F59E0B;"></div></div><span class="num" style="color:#F59E0B;">{score_valuation}/100</span></div>
 <div class="score-row"><span class="name">Risk (lower=safer)</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_raw_risk}%;background:#EF4444;"></div></div><span class="num" style="color:#EF4444;">{score_raw_risk}/100</span></div>
-<div class="score-row"><span class="name">News Sentiment</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_sentiment}%;background:#10B981;"></div></div><span class="num" style="color:#10B981;">{score_sentiment}/100</span></div>
-<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 4 of 8</span><span>Investment Research Report</span></div>
+<div class="score-row" style="margin-bottom:0;"><span class="name">News Sentiment</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_sentiment}%;background:#10B981;"></div></div><span class="num" style="color:#10B981;">{score_sentiment}/100</span></div>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 3 of 8</span><span>Investment Research Report</span></div>
 </div>
 
-<!-- PAGE 5: FINANCIAL CHARTS -->
+<!-- PAGE 4: FINANCIAL CHARTS -->
 <div class="page">
-<div class="section-header"><h2>Financial Charts</h2><span class="section-badge">Page 5 of 8</span></div>
-<div class="chart-wrap">
+<div class="section-header"><h2>Financial Performance Charts</h2><span class="section-badge">Page 4 of 8</span></div>
+<div class="chart-wrap" style="margin-bottom:14px;">
   <div class="chart-title">Revenue &amp; Net Income — 5 Year History</div>
   {svg_revenue_chart}
   <div class="chart-legend">
@@ -416,67 +411,73 @@ REPORT_HTML_TEMPLATE = """
     <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#10B981;"></div> Net Income</div>
   </div>
 </div>
-<div class="chart-wrap">
+<div class="chart-wrap" style="margin-bottom:14px;">
   <div class="chart-title">Operating Cash Flow — 5 Year History</div>
   {svg_cashflow_chart}
   <div class="chart-legend">
     <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#8B5CF6;"></div> Operating Cash Flow</div>
   </div>
 </div>
-<h3 style="margin:10px 0 8px;">Historical Financial Data</h3>
+<h3 style="margin-bottom:8px;">Historical Financial Data</h3>
 {financial_history_table}
-<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 5 of 8</span><span>Investment Research Report</span></div>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 4 of 8</span><span>Investment Research Report</span></div>
 </div>
 
-<!-- PAGE 6: NEWS ANALYSIS -->
+<!-- PAGE 5: NEWS & SENTIMENT ANALYSIS -->
 <div class="page">
-<div class="section-header"><h2>News &amp; Sentiment Analysis</h2><span class="section-badge">Page 6 of 8</span></div>
+<div class="section-header"><h2>News &amp; Sentiment Analysis</h2><span class="section-badge">Page 5 of 8</span></div>
 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
   <div class="metric-card green"><div class="label">Sentiment Score</div><div class="value">{score_sentiment}<span style="font-size:9pt;color:#64748B;">/100</span></div><div class="sub">Overall news tone</div></div>
   <div class="metric-card blue"><div class="label">Positive Headlines</div><div class="value">{pos_news_count}</div><div class="sub">Favorable articles</div></div>
   <div class="metric-card red"><div class="label">Risk Headlines</div><div class="value">{neg_news_count}</div><div class="sub">Adverse articles</div></div>
 </div>
-<div class="two-col">
-  <div><h3 style="color:#10B981;margin-bottom:10px;">✅ Positive Catalysts</h3>{pos_news_html}</div>
-  <div><h3 style="color:#EF4444;margin-bottom:10px;">⚠ Risk Headlines</h3>{neg_news_html}</div>
+<div class="two-col" style="margin-bottom:14px;">
+  <div><h3 style="color:#10B981;margin-bottom:8px;">✅ Positive Catalysts</h3>{pos_news_html}</div>
+  <div><h3 style="color:#EF4444;margin-bottom:8px;">⚠ Risk Headlines</h3>{neg_news_html}</div>
 </div>
 {neutral_news_section}
-<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 6 of 8</span><span>Investment Research Report</span></div>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 5 of 8</span><span>Investment Research Report</span></div>
 </div>
 
-<!-- PAGE 7: SWOT & DECISION -->
+<!-- PAGE 6: SWOT ANALYSIS -->
 <div class="page">
-<div class="section-header"><h2>SWOT Analysis &amp; Decision Breakdown</h2><span class="section-badge">Page 7 of 8</span></div>
-<div class="swot-grid">
+<div class="section-header"><h2>SWOT Analysis</h2><span class="section-badge">Page 6 of 8</span></div>
+<div class="swot-grid" style="margin-bottom:0;">
   <div class="swot-cell swot-s"><div class="swot-title">💪 Strengths</div><ul class="swot-list">{strengths}</ul></div>
   <div class="swot-cell swot-w"><div class="swot-title">⚡ Weaknesses</div><ul class="swot-list">{weaknesses}</ul></div>
   <div class="swot-cell swot-o"><div class="swot-title">🚀 Opportunities</div><ul class="swot-list">{opportunities}</ul></div>
   <div class="swot-cell swot-t"><div class="swot-title">🛡 Threats</div><ul class="swot-list">{threats}</ul></div>
 </div>
-<h3 style="margin-bottom:10px;">Decision Score Breakdown</h3>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 6 of 8</span><span>Investment Research Report</span></div>
+</div>
+
+<!-- PAGE 7: DECISION BREAKDOWN & PEER COMPARISON -->
+<div class="page">
+<div class="section-header"><h2>Decision Breakdown &amp; Peer Comparison</h2><span class="section-badge">Page 7 of 8</span></div>
+<h3 style="margin-bottom:8px;">Decision Score Breakdown</h3>
 <div class="score-row"><span class="name">Financial Health</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_health}%;background:#3B82F6;"></div></div><span class="num" style="color:#3B82F6;">{score_health}/100</span></div>
 <div class="score-row"><span class="name">Growth</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_growth}%;background:#8B5CF6;"></div></div><span class="num" style="color:#8B5CF6;">{score_growth}/100</span></div>
 <div class="score-row"><span class="name">Valuation</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_valuation}%;background:#F59E0B;"></div></div><span class="num" style="color:#F59E0B;">{score_valuation}/100</span></div>
 <div class="score-row"><span class="name">Risk Safety</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_risk_safety}%;background:#EF4444;"></div></div><span class="num" style="color:#EF4444;">{score_risk_safety}/100</span></div>
-<div class="score-row"><span class="name">News Sentiment</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_sentiment}%;background:#10B981;"></div></div><span class="num" style="color:#10B981;">{score_sentiment}/100</span></div>
-<div class="two-col" style="margin-top:14px;">
+<div class="score-row" style="margin-bottom:14px;"><span class="name">News Sentiment</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_sentiment}%;background:#10B981;"></div></div><span class="num" style="color:#10B981;">{score_sentiment}/100</span></div>
+<div class="two-col" style="margin-bottom:16px;">
   <div class="card" style="margin-bottom:0;"><h3 style="color:#10B981;">Reasons to Invest</h3><ul class="reason-list">{top_reasons_list}</ul></div>
   <div class="card" style="margin-bottom:0;"><h3 style="color:#EF4444;">Reasons to Be Careful</h3><ul class="reason-list">{major_risks_list}</ul></div>
 </div>
-<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 7 of 8</span><span>Investment Research Report</span></div>
-</div>
-
-<!-- PAGE 8: PEER COMPARISON + OUTLOOK + DISCLAIMER -->
-<div class="page">
-<div class="section-header"><h2>Peer Comparison &amp; Investment Outlook</h2><span class="section-badge">Page 8 of 8</span></div>
-<h3 style="margin-bottom:10px;">Competitor Benchmarking</h3>
-<table class="peer-table" style="margin-bottom:16px;">
+<h3 style="margin-bottom:8px;">Competitor Benchmarking</h3>
+<table class="peer-table" style="margin-bottom:0;">
   <thead><tr><th>Ticker</th><th>Company Name</th><th>Sector</th><th>Market Cap</th><th>Similarity</th><th>Rationale</th></tr></thead>
   <tbody>{peers_rows}</tbody>
 </table>
-<h3 style="margin-bottom:10px;">Investment Outlook (12–18 Months)</h3>
-<div class="outlook-box">{future_outlook}</div>
-<h3 style="margin-bottom:10px;">Legal Disclaimer</h3>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 7 of 8</span><span>Investment Research Report</span></div>
+</div>
+
+<!-- PAGE 8: INVESTMENT OUTLOOK & LEGAL DISCLAIMER -->
+<div class="page">
+<div class="section-header"><h2>Investment Outlook &amp; Legal Disclaimer</h2><span class="section-badge">Page 8 of 8</span></div>
+<h3 style="margin-bottom:8px;">Investment Outlook (12–18 Months)</h3>
+<div class="outlook-box" style="margin-bottom:16px;">{future_outlook}</div>
+<h3 style="margin-bottom:8px;">Legal Disclaimer</h3>
 <div class="disclaimer">
   <strong>IMPORTANT DISCLAIMER:</strong> This report was generated by the InvestIQ research system using data from Yahoo Finance
   and analysis by Gemini 2.5 Flash via LangGraph. This report is for <strong>informational and educational purposes only</strong>
