@@ -159,3 +159,160 @@ def get_company_profile(ticker_or_name):
         )
         return profile_data
 
+
+def is_market_open(timezone_str):
+    from datetime import datetime
+    import zoneinfo
+    try:
+        tz = zoneinfo.ZoneInfo(timezone_str)
+    except Exception:
+        return False
+    
+    now_tz = datetime.now(tz)
+    weekday = now_tz.weekday()
+    if weekday > 4:  # Sat/Sun
+        return False
+        
+    time_float = now_tz.hour + now_tz.minute / 60.0
+    if "Kolkata" in timezone_str or "India" in timezone_str:
+        return 9.25 <= time_float <= 15.5 # 9:15 AM - 3:30 PM IST
+    else:
+        return 9.5 <= time_float <= 16.0  # 9:30 AM - 4:00 PM EST
+
+def get_market_summary():
+    from django.core.cache import cache
+    from datetime import datetime
+    
+    cached_data = cache.get("market_summary_cache")
+    if cached_data:
+        return cached_data
+
+    symbols = {
+        '^GSPC': {'name': 'S&P 500', 'flag': '🇺🇸'},
+        '^IXIC': {'name': 'NASDAQ', 'flag': '🇺🇸'},
+        '^DJI': {'name': 'Dow Jones', 'flag': '🇺🇸'},
+        '^NSEI': {'name': 'NIFTY 50', 'flag': '🇮🇳'},
+        '^BSESN': {'name': 'SENSEX', 'flag': '🇮🇳'}
+    }
+
+    try:
+        tickers = yf.Tickers(' '.join(symbols.keys()))
+        result = []
+        for sym, meta in symbols.items():
+            t = tickers.tickers[sym]
+            fast = t.fast_info
+            
+            last_price = fast.get('lastPrice') or fast.get('last_price')
+            prev_close = fast.get('previousClose') or fast.get('previous_close')
+            timezone_str = fast.get('timezone') or 'America/New_York'
+            
+            if last_price is not None and prev_close is not None:
+                change = last_price - prev_close
+                pct_change = (change / prev_close) * 100 if prev_close else 0.0
+                is_open = is_market_open(timezone_str)
+                
+                result.append({
+                    'name': meta['name'],
+                    'value': f"{last_price:,.2f}",
+                    'change': f"{change:+.2f}",
+                    'pct_change': f"{pct_change:+.2f}%",
+                    'up': change >= 0,
+                    'flag': meta['flag'],
+                    'is_open': is_open,
+                    'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                })
+        
+        if result:
+            cache.set("market_summary_cache", result, timeout=60)
+            return result
+    except Exception as e:
+        print("[ERROR] Failed to fetch market summary:", e)
+        
+    return None
+
+def get_trending_stocks():
+    from django.core.cache import cache
+    
+    cached_data = cache.get("trending_stocks_cache")
+    if cached_data:
+        return cached_data
+
+    popular_tickers = ["AAPL", "MSFT", "NVDA", "GOOG", "META", "AMZN", "TSLA", "AVGO", "NFLX", "AMD"]
+    domain_map = {
+        'AAPL': 'apple.com',
+        'MSFT': 'microsoft.com',
+        'NVDA': 'nvidia.com',
+        'GOOG': 'google.com',
+        'META': 'meta.com',
+        'AMZN': 'amazon.com',
+        'TSLA': 'tesla.com',
+        'AVGO': 'broadcom.com',
+        'NFLX': 'netflix.com',
+        'AMD': 'amd.com'
+    }
+    name_map = {
+        'AAPL': 'Apple Inc.',
+        'MSFT': 'Microsoft Corp.',
+        'NVDA': 'NVIDIA Corp.',
+        'GOOG': 'Alphabet Inc.',
+        'META': 'Meta Platforms',
+        'AMZN': 'Amazon.com Inc.',
+        'TSLA': 'Tesla Inc.',
+        'AVGO': 'Broadcom Inc.',
+        'NFLX': 'Netflix Inc.',
+        'AMD': 'Advanced Micro Devices'
+    }
+
+    try:
+        tickers = yf.Tickers(' '.join(popular_tickers))
+        stocks_data = []
+        
+        from research.models import SavedReport
+        
+        for sym in popular_tickers:
+            t = tickers.tickers[sym]
+            fast = t.fast_info
+            
+            last_price = fast.get('lastPrice') or fast.get('last_price')
+            prev_close = fast.get('previousClose') or fast.get('previous_close')
+            volume = fast.get('lastVolume') or 0
+            
+            if last_price is not None and prev_close is not None:
+                change = last_price - prev_close
+                pct_change = (change / prev_close) * 100 if prev_close else 0.0
+                
+                # Fetch recommendation from database if analyzed
+                latest_report = SavedReport.objects.filter(company__ticker=sym).order_by('-created_at').first()
+                if latest_report:
+                    recommendation = latest_report.key_highlights.get('recommendation_payload', {}).get('recommendation', 'HOLD')
+                    ai_score = latest_report.key_highlights.get('recommendation_payload', {}).get('ai_score', 0)
+                else:
+                    recommendation = 'HOLD'
+                    ai_score = 70
+                
+                stocks_data.append({
+                    'ticker': sym,
+                    'name': name_map.get(sym, sym),
+                    'sector': 'Technology' if sym in ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'AMD'] else 'Consumer' if sym in ['TSLA', 'AMZN', 'NFLX'] else 'Communication',
+                    'price': f"${last_price:,.2f}",
+                    'pct_change': f"{pct_change:+.2f}%",
+                    'up': change >= 0,
+                    'logo_url': f"https://logo.clearbit.com/{domain_map[sym]}",
+                    'recommendation': recommendation,
+                    'ai_score': ai_score,
+                    'volume': volume,
+                    'abs_pct_change': abs(pct_change)
+                })
+        
+        # Sort by volume descending
+        stocks_data.sort(key=lambda x: x['volume'], reverse=True)
+        
+        top_5 = stocks_data[:5]
+        
+        if top_5:
+            cache.set("trending_stocks_cache", top_5, timeout=60)
+            return top_5
+    except Exception as e:
+        print("[ERROR] Failed to fetch trending stocks:", e)
+        
+    return None

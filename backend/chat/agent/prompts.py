@@ -295,7 +295,7 @@ REPORT_HTML_TEMPLATE = """
   <div>
     <div class="cover-brand">
       <div class="cover-brand-icon">⚡</div>
-      <div><div class="cover-brand-name">InvestIQ AI</div><div class="cover-brand-sub">Investment Research Platform</div></div>
+      <div><div class="cover-brand-name">InvestIQ</div><div class="cover-brand-sub">Investment Research Platform</div></div>
     </div>
     <div class="cover-ticker-badge">{ticker}</div>
     <div class="cover-title">{name}</div>
@@ -346,7 +346,7 @@ REPORT_HTML_TEMPLATE = """
   <div class="card" style="margin-bottom:0;"><h3 style="color:#10B981;">✅ Top Reasons to Invest</h3><ul class="reason-list">{top_reasons}</ul></div>
   <div class="card" style="margin-bottom:0;"><h3 style="color:#EF4444;">⚠ Key Risks</h3><ul class="reason-list">{major_risks}</ul></div>
 </div>
-<div class="page-footer"><strong>InvestIQ AI</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 2 of 8</span><span>Investment Research Report</span></div>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 2 of 8</span><span>Investment Research Report</span></div>
 </div>
 
 <!-- PAGE 3: COMPANY OVERVIEW -->
@@ -371,7 +371,7 @@ REPORT_HTML_TEMPLATE = """
     <tr><td style="font-weight:700;color:#475569;">Pipeline</td><td>LangGraph 10-Node</td><td style="font-weight:700;color:#475569;">Generated</td><td>{generated_at}</td></tr>
   </tbody>
 </table>
-<div class="page-footer"><strong>InvestIQ AI</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 3 of 8</span><span>Investment Research Report</span></div>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 3 of 8</span><span>Investment Research Report</span></div>
 </div>
 
 <!-- PAGE 4: FINANCIAL HIGHLIGHTS -->
@@ -402,7 +402,7 @@ REPORT_HTML_TEMPLATE = """
 <div class="score-row"><span class="name">Valuation</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_valuation}%;background:#F59E0B;"></div></div><span class="num" style="color:#F59E0B;">{score_valuation}/100</span></div>
 <div class="score-row"><span class="name">Risk (lower=safer)</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_raw_risk}%;background:#EF4444;"></div></div><span class="num" style="color:#EF4444;">{score_raw_risk}/100</span></div>
 <div class="score-row"><span class="name">News Sentiment</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:{score_sentiment}%;background:#10B981;"></div></div><span class="num" style="color:#10B981;">{score_sentiment}/100</span></div>
-<div class="page-footer"><strong>InvestIQ AI</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 4 of 8</span><span>Investment Research Report</span></div>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 4 of 8</span><span>Investment Research Report</span></div>
 </div>
 
 <!-- PAGE 5: FINANCIAL CHARTS -->
@@ -425,7 +425,7 @@ REPORT_HTML_TEMPLATE = """
 </div>
 <h3 style="margin:10px 0 8px;">Historical Financial Data</h3>
 {financial_history_table}
-<div class="page-footer"><strong>InvestIQ AI</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 5 of 8</span><span>Investment Research Report</span></div>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 5 of 8</span><span>Investment Research Report</span></div>
 </div>
 
 <!-- PAGE 6: NEWS ANALYSIS -->
@@ -441,7 +441,7 @@ REPORT_HTML_TEMPLATE = """
   <div><h3 style="color:#EF4444;margin-bottom:10px;">⚠ Risk Headlines</h3>{neg_news_html}</div>
 </div>
 {neutral_news_section}
-<div class="page-footer"><strong>InvestIQ AI</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 6 of 8</span><span>Investment Research Report</span></div>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 6 of 8</span><span>Investment Research Report</span></div>
 </div>
 
 <!-- PAGE 7: SWOT & DECISION -->
@@ -463,7 +463,7 @@ REPORT_HTML_TEMPLATE = """
   <div class="card" style="margin-bottom:0;"><h3 style="color:#10B981;">Reasons to Invest</h3><ul class="reason-list">{top_reasons_list}</ul></div>
   <div class="card" style="margin-bottom:0;"><h3 style="color:#EF4444;">Reasons to Be Careful</h3><ul class="reason-list">{major_risks_list}</ul></div>
 </div>
-<div class="page-footer"><strong>InvestIQ AI</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 7 of 8</span><span>Investment Research Report</span></div>
+<div class="page-footer"><strong>InvestIQ</strong><span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 7 of 8</span><span>Investment Research Report</span></div>
 </div>
 
 <!-- PAGE 8: PEER COMPARISON + OUTLOOK + DISCLAIMER -->
@@ -478,17 +478,17 @@ REPORT_HTML_TEMPLATE = """
 <div class="outlook-box">{future_outlook}</div>
 <h3 style="margin-bottom:10px;">Legal Disclaimer</h3>
 <div class="disclaimer">
-  <strong>IMPORTANT DISCLAIMER:</strong> This report was generated by the InvestIQ AI research system using data from Yahoo Finance
+  <strong>IMPORTANT DISCLAIMER:</strong> This report was generated by the InvestIQ research system using data from Yahoo Finance
   and analysis by Gemini 2.5 Flash via LangGraph. This report is for <strong>informational and educational purposes only</strong>
   and does not constitute investment advice, a recommendation to buy or sell any security, or an offer to purchase any financial instrument.
   Past performance does not guarantee future results. Always consult a qualified financial advisor before making investment decisions.
-  The AI models used may produce errors or omissions. Market conditions can change rapidly. InvestIQ AI assumes no liability
+  The AI models used may produce errors or omissions. Market conditions can change rapidly. InvestIQ assumes no liability
   for investment decisions made based on this report. Report generated on {generated_at}.
 </div>
 <div class="page-footer" style="margin-top:20px;">
-  <strong>InvestIQ AI &nbsp;·&nbsp; Investment Research Report</strong>
+  <strong>InvestIQ &nbsp;·&nbsp; Investment Research Report</strong>
   <span>{ticker} &nbsp;·&nbsp; {generated_at} &nbsp;·&nbsp; Page 8 of 8</span>
-  <span style="color:#94a3b8;">© InvestIQ AI. Not financial advice.</span>
+  <span style="color:#94a3b8;">© InvestIQ. Not financial advice.</span>
 </div>
 </div>
 
@@ -498,7 +498,7 @@ REPORT_HTML_TEMPLATE = """
 
 
 CHAT_FOLLOWUP_PROMPT = """
-You are the InvestIQ AI Research Assistant.
+You are the InvestIQ Research Assistant.
 You recently compiled a comprehensive investment report for {company_name} ({ticker}).
 Below is the full report context and previous conversation log:
 

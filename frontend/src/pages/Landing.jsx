@@ -52,7 +52,7 @@ export default function Landing() {
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white">
               IQ
             </div>
-            <span className="font-black text-lg tracking-tight text-white">InvestIQ <span className="text-blue-500">AI</span></span>
+            <span className="font-black text-lg tracking-tight text-white">InvestIQ</span>
           </div>
 
           <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-400">
@@ -223,9 +223,9 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded bg-blue-600 flex items-center justify-center font-black text-white text-[10px]">IQ</div>
-            <span className="font-bold text-white">InvestIQ AI</span>
+            <span className="font-bold text-white">InvestIQ</span>
           </div>
-          <p>© {new Date().getFullYear()} InvestIQ AI. All rights reserved. Simulated financial research tool.</p>
+          <p>© {new Date().getFullYear()} InvestIQ. All rights reserved. Professional financial research tool.</p>
         </div>
       </footer>
 

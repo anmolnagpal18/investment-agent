@@ -55,6 +55,21 @@ export const researchService = {
   retryReportStatus: async (reportId) => {
     const response = await api.post(`/report-status/${reportId}/retry/`);
     return response.data;
+  },
+
+  getMarketSummary: async () => {
+    const response = await api.get('/companies/market-summary/');
+    return response.data;
+  },
+
+  getTrending: async () => {
+    const response = await api.get('/companies/trending/');
+    return response.data;
+  },
+
+  getDashboardNews: async () => {
+    const response = await api.get('/companies/dashboard-news/');
+    return response.data;
   }
 };
 

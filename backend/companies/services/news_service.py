@@ -40,7 +40,7 @@ def calculate_lexicon_sentiment(title):
 def get_company_news(ticker_or_name):
     """
     Aggregates, parses, and formats the latest corporate news items for a stock.
-    Removes duplicates, filters out empty articles, and provides clean fallbacks.
+    Removes duplicates, filters out empty articles, validates URLs, and provides clean fallbacks.
     """
     ticker = resolve_ticker_by_name(ticker_or_name)
     if not ticker:
@@ -61,16 +61,17 @@ def get_company_news(ticker_or_name):
             if not isinstance(item, dict):
                 continue
 
-            # Support both flat and nested yfinance response structures
             content = item.get("content", item)
             if not isinstance(content, dict):
                 content = item
 
-            # 1. Title Parsing
+            # 1. Title Parsing & Empty Filter
             title = content.get("title") or content.get("headline") or ""
-            title = title.strip() if title else ""
+            title = title.strip()
+            if not title or title.lower() in ["no title", "untitled", "n/a", "not available", "none"]:
+                continue
 
-            # 2. URL Parsing
+            # 2. URL Parsing & Validation
             url = ""
             canonical_url_dict = content.get("canonicalUrl")
             if isinstance(canonical_url_dict, dict):
@@ -81,16 +82,12 @@ def get_company_news(ticker_or_name):
                     url = click_through_dict.get("url") or ""
             if not url:
                 url = content.get("link") or content.get("url") or ""
-            url = url.strip() if url else ""
-
-            # Ignore empty articles: must have at least a title or a URL
-            if not title and not url:
+            url = url.strip()
+            
+            # URL Validation
+            if not url or not (url.startswith("http://") or url.startswith("https://")):
                 continue
 
-            # Set clean fallbacks instead of placeholders
-            if not title or title.lower() in ["no title", "untitled", "n/a", "not available", "none"]:
-                title = "No recent news available."
-            
             # 3. Publisher Parsing
             publisher = ""
             provider_dict = content.get("provider")
@@ -102,9 +99,9 @@ def get_company_news(ticker_or_name):
             if isinstance(publisher, dict):
                 publisher = publisher.get("displayName") or publisher.get("name") or ""
 
-            publisher = str(publisher).strip() if publisher else ""
+            publisher = str(publisher).strip()
             if not publisher or publisher.lower() in ["unknown source", "unknown", "n/a", "not available", "none"]:
-                publisher = "Source unavailable"
+                publisher = "Financial News"
 
             # 4. Deduplication
             norm_title = title.lower().strip()
@@ -112,8 +109,7 @@ def get_company_news(ticker_or_name):
             if norm_title in seen_titles or (norm_url and norm_url in seen_urls):
                 continue
 
-            if norm_title and norm_title != "no recent news available.":
-                seen_titles.add(norm_title)
+            seen_titles.add(norm_title)
             if norm_url:
                 seen_urls.add(norm_url)
 
@@ -132,22 +128,75 @@ def get_company_news(ticker_or_name):
             else:
                 pub_date = time.strftime('%Y-%m-%d %H:%M:%S')
 
-            # Parse summary if present, else fallback
+            # 6. Summary Parsing
             summary = content.get("summary") or content.get("description") or title
+            summary = summary.strip()
 
+            # 7. Thumbnail parsing
+            thumbnail_url = ""
+            thumbnail_dict = content.get("thumbnail")
+            if isinstance(thumbnail_dict, dict):
+                resolutions = thumbnail_dict.get("resolutions", [])
+                if resolutions and isinstance(resolutions, list):
+                    thumbnail_url = resolutions[0].get("url") or ""
+                if not thumbnail_url:
+                    thumbnail_url = thumbnail_dict.get("originalUrl") or ""
+
+            # 8. Sentiment Analysis
             sentiment_data = calculate_lexicon_sentiment(title)
+
+            # 9. Category resolution
+            category = "Markets"
+            # Fuzzy categorize based on headline topics
+            title_lower = title.lower()
+            if "ai" in title_lower or "tech" in title_lower or "chip" in title_lower or "software" in title_lower:
+                category = "Technology"
+            elif "fed" in title_lower or "rate" in title_lower or "inflation" in title_lower:
+                category = "Macroeconomy"
+            elif "sue" in title_lower or "lawsuit" in title_lower or "court" in title_lower:
+                category = "Legal"
+            elif "earning" in title_lower or "quarter" in title_lower or "revenue" in title_lower:
+                category = "Earnings"
 
             formatted_news.append({
                 "title": title,
-                "date": pub_date,
-                "source": publisher,
                 "summary": summary,
+                "publisher": publisher,
+                "source": publisher, # for backward compatibility
+                "published_at": pub_date,
+                "date": pub_date, # for backward compatibility
+                "thumbnail": thumbnail_url,
+                "url": url,
                 "sentiment": sentiment_data["label"],
                 "sentiment_score": sentiment_data["score"],
-                "url": url
+                "ticker": ticker.upper(),
+                "category": category
             })
 
         return formatted_news
 
     except Exception as e:
         raise ValidationError(f"Failed to fetch news for '{ticker}': {str(e)}")
+
+
+def get_dashboard_news():
+    """
+    Retrieves broad-market financial news using SPY index feed.
+    Caches the results for 60 seconds to optimize performance.
+    """
+    from django.core.cache import cache
+    
+    cached_news = cache.get("dashboard_news_cache")
+    if cached_news:
+        return cached_news
+        
+    try:
+        news_data = get_company_news("SPY")
+        if news_data:
+            cache.set("dashboard_news_cache", news_data, timeout=60)
+            return news_data
+    except Exception as e:
+        print("[ERROR] Failed to fetch dashboard news:", e)
+        
+    return None
+

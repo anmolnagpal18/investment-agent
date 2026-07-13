@@ -1,6 +1,6 @@
-# InvestIQ AI
+# InvestIQ
 
-InvestIQ AI is an enterprise-grade, production-ready AI investment research assistant. It coordinates a multi-node cooperative agent pipeline via **LangGraph** to collect, analyze, score, and recommend equities with 100% explainable, mathematically deterministic scoring metrics. 
+InvestIQ is an enterprise-grade, production-ready AI investment research assistant. It coordinates a multi-node cooperative agent pipeline via **LangGraph** to collect, analyze, score, and recommend equities with 100% explainable, mathematically deterministic scoring metrics. 
 
 The frontend features a high-fidelity SaaS interface (Perplexity-style live analysis tracker, section-by-section streaming content, interactive Recharts graphs, and A4 print-ready layout engine) built with React 19, Tailwind CSS, and Framer Motion. The backend runs on Django REST Framework, utilizing yfinance for real-time market data extraction and Gemini 2.5 Flash for quantitative summary and SWOT reasoning.
 
@@ -8,7 +8,7 @@ The frontend features a high-fidelity SaaS interface (Perplexity-style live anal
 
 ## 🏗️ System Architecture & Workflow
 
-InvestIQ AI adopts a strict sandboxed agent pattern. Unlike standard AI chatbots that hallucinate ratings directly, the agent pipeline is modularized into distinct operational steps. Each node has a specialized scope, and the outputs are combined deterministically to produce the final recommendation.
+InvestIQ adopts a strict sandboxed agent pattern. Unlike standard AI chatbots that hallucinate ratings directly, the agent pipeline is modularized into distinct operational steps. Each node has a specialized scope, and the outputs are combined deterministically to produce the final recommendation.
 
 ### LangGraph Agent Pipeline Flow
 ```mermaid

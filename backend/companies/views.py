@@ -21,6 +21,48 @@ class CompanyViewSet(viewsets.ModelViewSet):
     lookup_field = 'ticker'  # Support lookup by ticker (e.g. /api/companies/AAPL/)
     lookup_value_regex = '[^/]+'  # Enable matching for tickers with dots like RELIANCE.NS
 
+    @action(detail=False, methods=['get'], url_path='market-summary')
+    def get_market_summary_endpoint(self, request):
+        """
+        Action endpoint to fetch live values for indices (S&P 500, NASDAQ, Dow Jones, NIFTY 50, SENSEX).
+        """
+        from .services.company_service import get_market_summary
+        try:
+            data = get_market_summary()
+            if data is None:
+                return Response({"detail": "Unable to fetch latest market data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": f"Unable to fetch latest market data: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'], url_path='trending')
+    def get_trending_endpoint(self, request):
+        """
+        Action endpoint to fetch trending stocks from yfinance.
+        """
+        from .services.company_service import get_trending_stocks
+        try:
+            data = get_trending_stocks()
+            if data is None:
+                return Response({"detail": "Unable to fetch trending stocks data"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'], url_path='dashboard-news')
+    def get_dashboard_news_endpoint(self, request):
+        """
+        Action endpoint to fetch broad market financial news for the dashboard feed.
+        """
+        from .services.news_service import get_dashboard_news
+        try:
+            data = get_dashboard_news()
+            if data is None:
+                return Response({"detail": "Unable to fetch dashboard news feed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
     @action(detail=True, methods=['get'], url_path='profile')
     def get_profile(self, request, ticker=None):
         """

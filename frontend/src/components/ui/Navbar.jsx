@@ -29,7 +29,7 @@ export function Navbar() {
             <span className="text-white text-xs font-black tracking-wider">IQ</span>
           </div>
           <span className="text-lg font-black tracking-tight text-white">
-            Invest<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">IQ AI</span>
+            Invest<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">IQ</span>
           </span>
         </Link>
       </div>

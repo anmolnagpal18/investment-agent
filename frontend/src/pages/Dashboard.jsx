@@ -18,24 +18,7 @@ import { Skeleton, CardSkeleton } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
 import api from '../services/api';
 
-// ─────────────────────────────────────────────
-// MARKET DATA — static fallback while no market API
-// ─────────────────────────────────────────────
-const MARKET_INDICES = [
-  { name: 'S&P 500',   value: '5,614.23', change: '+0.38%', up: true,  flag: '🇺🇸' },
-  { name: 'NASDAQ',    value: '17,941.10', change: '+0.54%', up: true,  flag: '🇺🇸' },
-  { name: 'NIFTY 50',  value: '24,302.15', change: '-0.21%', up: false, flag: '🇮🇳' },
-  { name: 'SENSEX',    value: '79,986.80', change: '-0.18%', up: false, flag: '🇮🇳' },
-  { name: 'Dow Jones', value: '39,737.52', change: '+0.20%', up: true,  flag: '🇺🇸' },
-];
-
-const TRENDING_STOCKS = [
-  { ticker: 'NVDA',  name: 'NVIDIA',    change: '+3.24%', up: true,  sector: 'Technology' },
-  { ticker: 'TSLA',  name: 'Tesla',     change: '-1.87%', up: false, sector: 'Automotive' },
-  { ticker: 'AAPL',  name: 'Apple',     change: '+0.92%', up: true,  sector: 'Technology' },
-  { ticker: 'MSFT',  name: 'Microsoft', change: '+1.13%', up: true,  sector: 'Technology' },
-  { ticker: 'AMZN',  name: 'Amazon',    change: '+0.74%', up: true,  sector: 'Consumer' },
-];
+import researchService from '../services/researchService';
 
 const HOW_IT_WORKS = [
   { step: 1, label: 'Company Research',   icon: Globe,   color: 'blue'    },
@@ -300,10 +283,10 @@ function HeroSearch({ onAnalyze }) {
   );
 }
 
-// ─────────────────────────────────────────────
-// MARKET SUMMARY CARD
-// ─────────────────────────────────────────────
-function MarketSummaryCard() {
+function MarketSummaryCard({ data, loading, error, onRefresh }) {
+  const lastUpdated = data && data.length > 0 ? data[0].last_updated : '';
+  const isOpen = data && data.length > 0 ? data.some(idx => idx.is_open) : false;
+
   return (
     <Card>
       <CardHeader>
@@ -311,83 +294,185 @@ function MarketSummaryCard() {
           <CardTitle className="flex items-center gap-2">
             <Globe className="w-4 h-4 text-blue-400" /> Market Summary
           </CardTitle>
-          <span className="text-[10px] text-slate-500 font-medium px-2 py-0.5 bg-slate-800/60 rounded border border-white/5">
-            Simulated · EOD
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRefresh}
+              disabled={loading}
+              className="p-1 hover:bg-white/5 rounded text-slate-500 hover:text-white transition-colors"
+              title="Refresh Market Data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+              isOpen 
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                : 'bg-red-500/10 border-red-500/20 text-red-400'
+            }`}>
+              {isOpen ? 'Market Open' : 'Market Closed'}
+            </span>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col gap-2">
-          {MARKET_INDICES.map((idx, i) => (
-            <motion.div
-              key={idx.name}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.06 }}
-              className="flex items-center justify-between py-2 border-b border-white/5 last:border-0"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-base leading-none">{idx.flag}</span>
-                <span className="text-sm font-semibold text-slate-200">{idx.name}</span>
+        {error ? (
+          <div className="py-8 text-center text-xs text-red-400 flex flex-col items-center justify-center gap-2">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <span>{error}</span>
+          </div>
+        ) : loading && (!data || data.length === 0) ? (
+          <div className="flex flex-col gap-3 py-2">
+            {[1, 2, 3, 4, 5].map((idx) => (
+              <div key={idx} className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-4 bg-slate-850 rounded animate-pulse" />
+                  <div className="w-20 h-4 bg-slate-850 rounded animate-pulse" />
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="w-16 h-4 bg-slate-855 rounded animate-pulse" />
+                  <div className="w-12 h-3 bg-slate-855 rounded animate-pulse" />
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-white tabular-nums">{idx.value}</p>
-                <p className={`text-xs font-semibold tabular-nums ${idx.up ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {idx.up ? <TrendingUp className="inline w-3 h-3 mr-0.5" /> : <TrendingDown className="inline w-3 h-3 mr-0.5" />}
-                  {idx.change}
-                </p>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {data.map((idx, i) => (
+              <motion.div
+                key={idx.name}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.06 }}
+                className="flex items-center justify-between py-2 border-b border-white/5 last:border-0"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-base leading-none">{idx.flag}</span>
+                  <span className="text-sm font-semibold text-slate-200">{idx.name}</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-white tabular-nums">{idx.value}</p>
+                  <p className={`text-xs font-semibold tabular-nums flex items-center justify-end gap-0.5 ${idx.up ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {idx.up ? <TrendingUp className="w-3.5 h-3.5 mr-0.5" /> : <TrendingDown className="w-3.5 h-3.5 mr-0.5" />}
+                    {idx.change} ({idx.pct_change})
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+            {lastUpdated && (
+              <div className="text-[9px] text-slate-650 text-right mt-2 font-mono">
+                Last updated: {lastUpdated}
               </div>
-            </motion.div>
-          ))}
-        </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-// ─────────────────────────────────────────────
-// TRENDING STOCKS CARD
-// ─────────────────────────────────────────────
-function TrendingStocksCard({ onAnalyze }) {
+function TrendingStocksCard({ data, loading, error, onRefresh, onAnalyze }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-purple-400" /> Trending Stocks
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-purple-400" /> Trending Stocks
+          </CardTitle>
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="p-1 hover:bg-white/5 rounded text-slate-500 hover:text-white transition-colors"
+            title="Refresh Trending Data"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col gap-1">
-          {TRENDING_STOCKS.map((s, i) => (
-            <motion.button
-              key={s.ticker}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.07 }}
-              onClick={() => onAnalyze(s.ticker)}
-              className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg
-                hover:bg-white/5 border border-transparent hover:border-white/8
-                transition-all group text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600/20 to-blue-600/20
-                  border border-white/10 flex items-center justify-center text-[10px] font-black text-white">
-                  {s.ticker.slice(0, 2)}
+        {error ? (
+          <div className="py-8 text-center text-xs text-red-400 flex flex-col items-center justify-center gap-2">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <span>{error}</span>
+          </div>
+        ) : loading && (!data || data.length === 0) ? (
+          <div className="flex flex-col gap-2.5">
+            {[1, 2, 3, 4, 5].map((idx) => (
+              <div key={idx} className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-slate-850 animate-pulse" />
+                  <div className="flex flex-col gap-1.5">
+                    <div className="w-20 h-4 bg-slate-855 rounded animate-pulse" />
+                    <div className="w-12 h-2.5 bg-slate-855 rounded animate-pulse" />
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">{s.name}</p>
-                  <p className="text-[10px] text-slate-500">{s.sector}</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-12 h-4 bg-slate-850 rounded animate-pulse" />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-bold tabular-nums ${s.up ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {s.change}
-                </span>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
-              </div>
-            </motion.button>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {data.map((s, i) => (
+              <motion.button
+                key={s.ticker}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.07 }}
+                onClick={() => onAnalyze(s.ticker)}
+                className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg
+                  hover:bg-white/5 border border-transparent hover:border-white/8
+                  transition-all group text-left"
+              >
+                <div className="flex items-center gap-3">
+                  {s.logo_url ? (
+                    <img
+                      src={s.logo_url}
+                      alt={s.name}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                      className="w-8 h-8 rounded-lg border border-white/10 object-contain p-0.5 bg-white flex-shrink-0"
+                    />
+                  ) : null}
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600/20 to-blue-600/20
+                    border border-white/10 flex items-center justify-center text-[10px] font-black text-white flex-shrink-0"
+                    style={{ display: s.logo_url ? 'none' : 'flex' }}
+                  >
+                    {s.ticker.slice(0, 2)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-white truncate">{s.name}</p>
+                      <span className="text-[9px] bg-slate-800 px-1 py-0.2 rounded text-slate-400 font-bold">{s.ticker}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500">{s.sector}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-white tabular-nums">{s.price}</p>
+                    <p className={`text-[10px] font-bold tabular-nums ${s.up ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {s.pct_change}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                      s.recommendation === 'BUY' || s.recommendation === 'Strong BUY'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : s.recommendation === 'HOLD'
+                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    }`}>
+                      {s.recommendation}
+                    </span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-650 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -723,51 +808,108 @@ function RecentlyComparedCard({ comparisons, loading, navigate }) {
 // ─────────────────────────────────────────────
 // LATEST NEWS CARD
 // ─────────────────────────────────────────────
-const STATIC_NEWS = [
-  { title: 'Fed signals rates on hold for longer as inflation stays sticky', source: 'Reuters',       date: '2h ago',   url: '#' },
-  { title: 'NVIDIA posts record quarterly revenue driven by AI chip demand',  source: 'Bloomberg',     date: '4h ago',   url: '#' },
-  { title: 'Sensex recovers 400 pts; Reliance, HDFC Bank lead gains',        source: 'Economic Times', date: '6h ago',   url: '#' },
-  { title: "Tesla's new model launch boosts investor sentiment",              source: 'CNBC',          date: '8h ago',   url: '#' },
-  { title: 'Apple set to report earnings amid China iPhone demand concerns',  source: 'WSJ',           date: '1d ago',   url: '#' },
-];
+function LatestNewsCard({ data, loading, error, onRefresh }) {
+  const getRelativeTime = (dateStr) => {
+    try {
+      const pubDate = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now - pubDate;
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      if (diffHours < 1) {
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        return `${diffMins}m ago`;
+      }
+      if (diffHours < 24) {
+        return `${diffHours}h ago`;
+      }
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ago`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
 
-function LatestNewsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Newspaper className="w-4 h-4 text-sky-400" /> Latest Financial News
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Newspaper className="w-4 h-4 text-sky-400" /> Latest Financial News
+          </CardTitle>
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="p-1 hover:bg-white/5 rounded text-slate-500 hover:text-white transition-colors"
+            title="Refresh News Feed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col gap-0">
-          {STATIC_NEWS.map((n, i) => (
-            <motion.a
-              key={i}
-              href={n.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.06 }}
-              className="flex items-start gap-3 py-3 border-b border-white/5 last:border-0
-                hover:bg-white/3 rounded-lg px-2 -mx-2 transition-colors group"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-sky-400 mt-2 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-slate-200 font-medium leading-snug group-hover:text-white transition-colors line-clamp-2">
-                  {n.title}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] text-sky-400 font-semibold">{n.source}</span>
-                  <span className="text-[10px] text-slate-600">·</span>
-                  <span className="text-[10px] text-slate-500">{n.date}</span>
+        {error ? (
+          <div className="py-8 text-center text-xs text-red-400 flex flex-col items-center justify-center gap-2">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <span>{error}</span>
+          </div>
+        ) : loading && (!data || data.length === 0) ? (
+          <div className="flex flex-col gap-3">
+            {[1, 2, 3, 4].map((idx) => (
+              <div key={idx} className="flex gap-4 py-3 border-b border-white/5 last:border-0">
+                <div className="w-16 h-12 bg-slate-850 rounded animate-pulse flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-slate-855 rounded w-full animate-pulse" />
+                  <div className="h-3 bg-slate-855 rounded w-1/3 animate-pulse" />
                 </div>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-slate-600 group-hover:text-sky-400 flex-shrink-0 mt-0.5 transition-colors" />
-            </motion.a>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0">
+            {data.map((n, i) => (
+              <motion.a
+                key={i}
+                href={n.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06 }}
+                className="flex items-start gap-4 py-3.5 border-b border-white/5 last:border-0
+                  hover:bg-white/3 rounded-lg px-3 -mx-3 transition-all group"
+              >
+                {n.thumbnail ? (
+                  <img
+                    src={n.thumbnail}
+                    alt=""
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                    className="w-16 h-12 rounded object-cover border border-white/5 bg-slate-900 flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-16 h-12 rounded bg-slate-900/50 border border-white/5 flex items-center justify-center text-slate-650 flex-shrink-0">
+                    <Newspaper className="w-4 h-4" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[8px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1 py-0.2 rounded font-bold uppercase tracking-wider">
+                      {n.category}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-200 font-semibold leading-snug group-hover:text-white transition-colors line-clamp-2">
+                    {n.title}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-[10px] text-sky-400 font-bold">{n.publisher}</span>
+                    <span className="text-[10px] text-slate-650">·</span>
+                    <span className="text-[10px] text-slate-500">{getRelativeTime(n.published_at)}</span>
+                  </div>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-600 group-hover:text-sky-400 flex-shrink-0 mt-0.5 transition-colors" />
+              </motion.a>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -790,7 +932,7 @@ function HowItWorksStrip() {
     <Card className="col-span-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-400" /> How InvestIQ AI Makes Decisions
+          <Sparkles className="w-4 h-4 text-amber-400" /> How InvestIQ Makes Decisions
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -836,6 +978,71 @@ export default function Dashboard() {
     history, favorites, comparisons, reports,
     agentStatus, lastRunAt, loading, error, stats, refetch
   } = useDashboard();
+
+  const [marketData, setMarketData] = useState([]);
+  const [marketLoading, setMarketLoading] = useState(true);
+  const [marketError, setMarketError] = useState('');
+  
+  const [trendingData, setTrendingData] = useState([]);
+  const [trendingLoading, setTrendingLoading] = useState(true);
+  const [trendingError, setTrendingError] = useState('');
+  
+  const [newsData, setNewsData] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsError, setNewsError] = useState('');
+
+  const fetchMarketData = useCallback(async () => {
+    setMarketLoading(true);
+    setMarketError('');
+    try {
+      const data = await researchService.getMarketSummary();
+      setMarketData(data);
+    } catch (err) {
+      setMarketError(err?.response?.data?.detail || 'Unable to fetch latest market data');
+    } finally {
+      setMarketLoading(false);
+    }
+  }, []);
+
+  const fetchTrendingData = useCallback(async () => {
+    setTrendingLoading(true);
+    setTrendingError('');
+    try {
+      const data = await researchService.getTrending();
+      setTrendingData(data);
+    } catch (err) {
+      setTrendingError('Unable to fetch trending stocks data');
+    } finally {
+      setTrendingLoading(false);
+    }
+  }, []);
+
+  const fetchNewsData = useCallback(async () => {
+    setNewsLoading(true);
+    setNewsError('');
+    try {
+      const data = await researchService.getDashboardNews();
+      setNewsData(data);
+    } catch (err) {
+      setNewsError('Unable to fetch latest financial news');
+    } finally {
+      setNewsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMarketData();
+    fetchTrendingData();
+    fetchNewsData();
+
+    const interval = setInterval(() => {
+      fetchMarketData();
+      fetchTrendingData();
+      fetchNewsData();
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [fetchMarketData, fetchTrendingData, fetchNewsData]);
 
   const username = user?.username || 'User';
   const firstName = username.charAt(0).toUpperCase() + username.slice(1);
@@ -968,11 +1175,11 @@ export default function Dashboard() {
 
           {/* Row 1 */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <MarketSummaryCard />
+            <MarketSummaryCard data={marketData} loading={marketLoading} error={marketError} onRefresh={fetchMarketData} />
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <TrendingStocksCard onAnalyze={handleAnalyze} />
+            <TrendingStocksCard data={trendingData} loading={trendingLoading} error={trendingError} onRefresh={fetchTrendingData} onAnalyze={handleAnalyze} />
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -997,7 +1204,7 @@ export default function Dashboard() {
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
             className="md:col-span-2 xl:col-span-2"
           >
-            <LatestNewsCard />
+            <LatestNewsCard data={newsData} loading={newsLoading} error={newsError} onRefresh={fetchNewsData} />
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
