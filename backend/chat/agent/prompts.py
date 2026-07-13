@@ -126,7 +126,7 @@ REPORT_HTML_TEMPLATE = """
         }}
         .page {{
             width: 210mm;
-            height: 297mm; /* Exact physical A4 page height */
+            height: 296mm; /* A4 height with safety margin to prevent sub-pixel page overflows */
             padding: 16mm; /* Exact physical A4 page margin */
             position: relative;
             page-break-after: always;
