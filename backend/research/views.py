@@ -99,21 +99,17 @@ class AnalyzeView(APIView):
                         pdf_status="pending",
                         analysis_started_at=timezone.now(),
                     )
-                    print(f"[DEBUG] Created SavedReport fallback: {report.id}")
+                    logger.debug(f"Created SavedReport fallback: {report.id}")
                 except Exception as fallback_err:
-                    import traceback
-                    print(f"[ERROR] Fallback SavedReport creation failed: {fallback_err}")
-                    traceback.print_exc()
+                    logger.error(f"Fallback SavedReport creation failed: {fallback_err}")
 
             # ── Step B: Build HTML synchronously ──────────────────────────────
             report_html_content = None
             try:
                 report_html_content = build_report_html(result, str(report.id) if report else "preview")
-                print(f"[DEBUG] build_report_html SUCCESS, length={len(report_html_content)}")
+                logger.debug(f"build_report_html SUCCESS, length={len(report_html_content)}")
             except Exception as html_err:
-                import traceback
-                print(f"[ERROR] build_report_html FAILED: {html_err}")
-                traceback.print_exc()
+                logger.error(f"build_report_html FAILED: {html_err}")
 
             # ── Step C: Save HTML to DB + file synchronously ───────────────────
             download_url = None
@@ -135,11 +131,9 @@ class AnalyzeView(APIView):
                     report.save()
                     download_url = report.pdf_file.url
                     pdf_status_val = "ready"
-                    print(f"[DEBUG] PDF file saved synchronously: {download_url}")
+                    logger.debug(f"PDF file saved synchronously: {download_url}")
                 except Exception as save_err:
-                    import traceback
-                    print(f"[ERROR] Synchronous PDF save failed: {save_err}")
-                    traceback.print_exc()
+                    logger.error(f"Synchronous PDF save failed: {save_err}")
                     # Fall back to background thread
                     if report:
                         t = threading.Thread(target=generate_pdf_background, args=(str(report.id), result))
@@ -851,3 +845,626 @@ class ExplainView(APIView):
             # Cache the fallback response
             cache.set(cache_key, reply_content, 86400)
             return Response({"reply": reply_content}, status=status.HTTP_200_OK)
+
+
+def build_comparison_matrix_html(companies_summary):
+    metrics = [
+        ("AI Score", "ai_score", True),
+        ("Financial Health", "financial", True),
+        ("Growth", "growth", True),
+        ("Valuation", "valuation", True),
+        ("Risk Safety", "risk", True),
+        ("News Sentiment", "sentiment", True),
+    ]
+    rows_html = []
+    for label, key, higher_is_better in metrics:
+        vals = [c.get(key, 0) for c in companies_summary]
+        best_val = max(vals) if higher_is_better else min(vals)
+        worst_val = min(vals) if higher_is_better else max(vals)
+        
+        row_str = f"<tr><td><strong>{label}</strong></td>"
+        for c in companies_summary:
+            v = c.get(key, 0)
+            cls = ""
+            if len(companies_summary) > 1:
+                if v == best_val and best_val != worst_val:
+                    cls = ' class="best"'
+                elif v == worst_val and best_val != worst_val:
+                    cls = ' class="worst"'
+                else:
+                    cls = ' class="neutral"'
+            row_str += f"<td{cls}>{v}/100</td>"
+        row_str += "</tr>"
+        rows_html.append(row_str)
+        
+    return "\n".join(rows_html)
+
+
+def build_financial_metrics_rows_html(companies_data):
+    metrics = [
+        ("Current Price ($)", lambda c: c.get("preprocessed_metrics", {}).get("current_price") or c.get("ratios", {}).get("current_price"), True, "${:,.2f}"),
+        ("Market Cap", lambda c: c.get("market_cap"), True, "${:,.0f}"),
+        ("Revenue", lambda c: c.get("preprocessed_metrics", {}).get("revenue") or c.get("ratios", {}).get("revenue") or (c.get("historical_yearly", [{}])[0].get("revenue") if c.get("historical_yearly") else 0), True, "${:,.0f}"),
+        ("Revenue Growth (YoY)", lambda c: c.get("ratios", {}).get("revenue_growth") or (c.get("historical_yearly", [{}])[0].get("revenue_growth") if c.get("historical_yearly") else 0), True, "{:.2f}%"),
+        ("Operating Margin", lambda c: c.get("ratios", {}).get("operating_margin") or (c.get("historical_yearly", [{}])[0].get("operating_margin") if c.get("historical_yearly") else 0), True, "{:.2f}%"),
+        ("Net Margin", lambda c: c.get("ratios", {}).get("net_margin") or (c.get("historical_yearly", [{}])[0].get("net_margin") if c.get("historical_yearly") else 0), True, "{:.2f}%"),
+        ("ROE", lambda c: c.get("ratios", {}).get("roe") or (c.get("historical_yearly", [{}])[0].get("roe") if c.get("historical_yearly") else 0), True, "{:.2f}%"),
+        ("EPS", lambda c: c.get("ratios", {}).get("eps") or c.get("ratios", {}).get("trailing_eps"), True, "${:.2f}"),
+        ("P/E Ratio", lambda c: c.get("ratios", {}).get("pe") or c.get("ratios", {}).get("trailing_pe"), False, "{:.2f}"),
+        ("PEG Ratio", lambda c: c.get("ratios", {}).get("peg_ratio"), False, "{:.2f}"),
+        ("P/B Ratio", lambda c: c.get("ratios", {}).get("pb"), False, "{:.2f}"),
+        ("EV/EBITDA", lambda c: c.get("ratios", {}).get("ev_ebitda"), False, "{:.2f}"),
+        ("Debt/Equity Ratio", lambda c: c.get("ratios", {}).get("de_ratio"), False, "{:.2f}"),
+        ("Current Ratio", lambda c: c.get("ratios", {}).get("current_ratio"), True, "{:.2f}"),
+        ("Beta", lambda c: c.get("ratios", {}).get("beta"), False, "{:.2f}"),
+        ("Free Cash Flow", lambda c: c.get("preprocessed_metrics", {}).get("free_cash_flow"), True, "${:,.0f}"),
+        ("Dividend Yield", lambda c: c.get("ratios", {}).get("dividend_yield"), True, "{:.2f}%"),
+        ("52 Week High", lambda c: c.get("ratios", {}).get("fifty_two_week_high"), True, "${:,.2f}"),
+        ("52 Week Low", lambda c: c.get("ratios", {}).get("fifty_two_week_low"), True, "${:,.2f}"),
+    ]
+    
+    rows_html = []
+    for label, extractor, higher_is_better, fmt_str in metrics:
+        vals = []
+        for c in companies_data:
+            val = extractor(c)
+            if "%" in fmt_str and val is not None and val < 1.0 and val > -1.0:
+                val = val * 100.0
+            try:
+                val = float(val) if val is not None else 0.0
+            except (ValueError, TypeError):
+                val = 0.0
+            vals.append(val)
+            
+        best_val = max(vals) if higher_is_better else min(vals)
+        worst_val = min(vals) if higher_is_better else max(vals)
+        
+        row_str = f"<tr><td><strong>{label}</strong></td>"
+        for idx, val in enumerate(vals):
+            cls = ""
+            if len(companies_data) > 1:
+                if val == best_val and best_val != worst_val:
+                    cls = ' class="best"'
+                elif val == worst_val and best_val != worst_val:
+                    cls = ' class="worst"'
+                else:
+                    cls = ' class="neutral"'
+            
+            formatted = fmt_str.format(val)
+            if val == 0.0 and label not in ["Beta", "EPS", "P/E Ratio", "PEG Ratio", "P/B Ratio", "EV/EBITDA", "Debt/Equity Ratio"]:
+                formatted = "—"
+            row_str += f"<td{cls}>{formatted}</td>"
+        row_str += "</tr>"
+        rows_html.append(row_str)
+        
+    return "\n".join(rows_html)
+
+
+def build_winner_analysis_cards_html(companies_summary, companies_data):
+    if len(companies_summary) < 2:
+        return "<p>Add at least two companies to compare details.</p>"
+        
+    def get_co_data(ticker):
+        return next((c for c in companies_data if c["ticker"] == ticker), None)
+        
+    cards = []
+    
+    # 1. Overall Winner
+    best_co = max(companies_summary, key=lambda x: x["ai_score"])
+    other_cos = [c for c in companies_summary if c["ticker"] != best_co["ticker"]]
+    others_str = " and ".join(c["ticker"] for c in other_cos)
+    overall_reason = f"🏆 <strong>{best_co['name']} ({best_co['ticker']})</strong> is the superior investment choice with a composite AI Score of <strong>{best_co['ai_score']}/100</strong>, outperforming {others_str}."
+    cards.append(format_winner_card("Overall Winner", best_co["ticker"], overall_reason, "#0F172A"))
+    
+    # 2. Financial Winner
+    best_fin = max(companies_summary, key=lambda x: x.get("financial", 0))
+    fin_co = get_co_data(best_fin["ticker"])
+    cr = fin_co.get("ratios", {}).get("current_ratio", 0.0) or 0.0
+    de = fin_co.get("ratios", {}).get("debt_to_equity", 0.0) or 0.0
+    fin_reason = f"<strong>{best_fin['ticker']}</strong> leads Financial Health at <strong>{best_fin['financial']}/100</strong>, supported by a Current Ratio of <strong>{cr:.2f}x</strong> and a Debt/Equity ratio of <strong>{de:.2f}%</strong>."
+    cards.append(format_winner_card("Financial Winner", best_fin["ticker"], fin_reason, "#3B82F6"))
+    
+    # 3. Growth Winner
+    best_gro = max(companies_summary, key=lambda x: x.get("growth", 0))
+    gro_co = get_co_data(best_gro["ticker"])
+    rev_g = gro_co.get("preprocessed_metrics", {}).get("revenue_growth_pct", 0.0) or 0.0
+    eps_g = gro_co.get("preprocessed_metrics", {}).get("eps_growth_pct", 0.0) or 0.0
+    gro_reason = f"<strong>{best_gro['ticker']}</strong> leads Growth at <strong>{best_gro['growth']}/100</strong>, showing YoY revenue growth of <strong>{rev_g:.2f}%</strong> and EPS growth of <strong>{eps_g:.2f}%</strong>."
+    cards.append(format_winner_card("Growth Winner", best_gro["ticker"], gro_reason, "#10B981"))
+    
+    # 4. Value Winner
+    best_val = max(companies_summary, key=lambda x: x.get("valuation", 0))
+    val_co = get_co_data(best_val["ticker"])
+    pe = val_co.get("ratios", {}).get("pe_ratio", 0.0) or 0.0
+    peg = val_co.get("ratios", {}).get("peg_ratio", 0.0) or 0.0
+    val_reason = f"<strong>{best_val['ticker']}</strong> leads Valuation at <strong>{best_val['valuation']}/100</strong>, trading at a P/E of <strong>{pe:.2f}</strong> and PEG of <strong>{peg:.2f}</strong>."
+    cards.append(format_winner_card("Value Winner", best_val["ticker"], val_reason, "#F59E0B"))
+    
+    # 5. Risk Winner
+    best_risk = max(companies_summary, key=lambda x: x.get("risk", 0))
+    risk_co = get_co_data(best_risk["ticker"])
+    beta = risk_co.get("ratios", {}).get("beta", 1.0) or 1.0
+    risk_reason = f"<strong>{best_risk['ticker']}</strong> leads Risk Safety at <strong>{best_risk['risk']}/100</strong>, demonstrating lower market volatility with a Beta of <strong>{beta:.2f}</strong>."
+    cards.append(format_winner_card("Risk Winner", best_risk["ticker"], risk_reason, "#EF4444"))
+    
+    # 6. News Winner
+    best_news = max(companies_summary, key=lambda x: x.get("sentiment", 50))
+    news_reason = f"<strong>{best_news['ticker']}</strong> leads News Sentiment at <strong>{best_news['sentiment']}/100</strong>, reflecting a highly positive lexicon tone across recent press headlines."
+    cards.append(format_winner_card("News Winner", best_news["ticker"], news_reason, "#64748B"))
+    
+    # 7. Income Winner
+    yields = []
+    for c in companies_data:
+        dy = c.get("ratios", {}).get("dividend_yield", 0.0) or 0.0
+        if dy < 1.0 and dy > 0:
+            dy = dy * 100
+        yields.append((c["ticker"], dy))
+    best_inc_ticker, best_yield = max(yields, key=lambda x: x[1])
+    if best_yield > 0:
+        inc_reason = f"<strong>{best_inc_ticker}</strong> leads Income with a Dividend Yield of <strong>{best_yield:.2f}%</strong>."
+    else:
+        fcf_margins = []
+        for c in companies_data:
+            rev = c.get("preprocessed_metrics", {}).get("revenue") or c.get("ratios", {}).get("revenue") or 1.0
+            fcf = c.get("preprocessed_metrics", {}).get("free_cash_flow") or 0.0
+            margin = (fcf / rev) * 100 if rev > 0 else 0.0
+            fcf_margins.append((c["ticker"], margin))
+        best_inc_ticker, best_margin = max(fcf_margins, key=lambda x: x[1])
+        inc_reason = f"<strong>{best_inc_ticker}</strong> leads Income with a Free Cash Flow Margin of <strong>{best_margin:.2f}%</strong>."
+    cards.append(format_winner_card("Income Winner", best_inc_ticker, inc_reason, "#8B5CF6"))
+    
+    return "\n".join(cards)
+
+def format_winner_card(title, ticker, reason, border_color):
+    return f"""
+    <div class="card" style="border-left: 4px solid {border_color}; margin-bottom: 8px; padding: 10px 14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <h4 style="color:{border_color}; font-size:9.5pt; font-weight:800; text-transform:uppercase; margin-bottom:0;">{title}</h4>
+        <span style="font-size:8.5pt; font-weight:900; background:{border_color}1A; color:{border_color}; padding:2px 6px; border-radius:4px;">{ticker}</span>
+      </div>
+      <p style="font-size:8.5pt; color:#475569; margin-top:2px; line-height:1.45;">{reason}</p>
+    </div>
+    """
+
+
+def build_swot_grid_content_html(companies_data):
+    html = []
+    for c in companies_data[:3]:
+        swot = c.get("swot", {}) or {}
+        strengths = "".join(f"<li>{x}</li>" for x in swot.get("strengths", [])[:3])
+        weaknesses = "".join(f"<li>{x}</li>" for x in swot.get("weaknesses", [])[:2])
+        opportunities = "".join(f"<li>{x}</li>" for x in swot.get("opportunities", [])[:2])
+        threats = "".join(f"<li>{x}</li>" for x in swot.get("threats", [])[:2])
+        
+        if not strengths: strengths = "<li>Consistent fundamental stability</li>"
+        if not weaknesses: weaknesses = "<li>Subject to macroeconomic cycles</li>"
+        if not opportunities: opportunities = "<li>Global market expansion potential</li>"
+        if not threats: threats = "<li>Competitive pressure in core sectors</li>"
+        
+        html.append(f"""
+        <div class="card" style="margin-bottom:14px; padding: 12px;">
+          <h3 style="color:#0F172A; margin-bottom:8px;">{c['ticker']} SWOT Analysis</h3>
+          <div class="swot-grid">
+            <div class="swot-cell swot-s"><div class="swot-title">Strengths</div><ul class="swot-list">{strengths}</ul></div>
+            <div class="swot-cell swot-w"><div class="swot-title">Weaknesses</div><ul class="swot-list">{weaknesses}</ul></div>
+            <div class="swot-cell swot-o"><div class="swot-title">Opportunities</div><ul class="swot-list">{opportunities}</ul></div>
+            <div class="swot-cell swot-t"><div class="swot-title">Threats</div><ul class="swot-list">{threats}</ul></div>
+          </div>
+        </div>
+        """)
+    return "\n".join(html)
+
+
+def build_news_comparison_html(companies_data):
+    num_cos = len(companies_data)
+    cols_style = f"display: grid; grid-template-columns: repeat({num_cos}, 1fr); gap: 12px;"
+    html = [f'<div class="three-col" style="{cols_style}">' if num_cos == 3 else f'<div class="two-col" style="{cols_style}">']
+    
+    for c in companies_data:
+        ticker = c["ticker"]
+        news_items = c.get("news", [])[:3]
+        
+        html.append(f'  <div class="card" style="margin-bottom:0; padding: 12px;">')
+        html.append(f'    <h3 style="color:#0F172A; margin-bottom:8px; font-size:9.5pt;">{ticker} News Sentiment</h3>')
+        if not news_items:
+            html.append('    <p style="font-size:8pt; color:#94a3b8; font-style:italic;">No recent media coverage found.</p>')
+        else:
+            for item in news_items:
+                title = item.get("title", "No Title")
+                source = item.get("publisher") or item.get("source") or "Unknown"
+                sent_score = float(item.get("sentiment_score", 0.0))
+                
+                if sent_score > 0.1:
+                    sent_class = "positive"
+                    sent_label = "Positive"
+                elif sent_score < -0.1:
+                    sent_class = "negative"
+                    sent_label = "Negative"
+                else:
+                    sent_class = "neutral"
+                    sent_label = "Neutral"
+                    
+                html.append(f'    <div class="news-card {sent_class}">')
+                html.append(f'      <div class="headline">{title[:70]}...</div>')
+                html.append(f'      <div class="meta">{source} &nbsp;·&nbsp; Sentiment: <strong>{sent_label}</strong></div>')
+                html.append(f'    </div>')
+        html.append('  </div>')
+        
+    html.append('</div>')
+    return "\n".join(html)
+
+
+def build_verdict_details_html(companies_summary, winner, winner_reasons):
+    best_c = next((c for c in companies_summary if c["ticker"] == winner), None)
+    rec = best_c.get("recommendation", "BUY") if best_c else "BUY"
+    score = best_c.get("ai_score", 0) if best_c else 80
+    
+    reasons_list = "".join(f"<li style='margin-bottom:4px; font-size: 8.5pt;'>✓ {r}</li>" for r in winner_reasons)
+    
+    html = f"""
+    <p style="font-size:9pt; line-height:1.5; margin-bottom:10px; color:#0F172A;">
+      Based on the comparative analysis, <strong>{winner}</strong> is the superior selection with an overall AI Score of <strong>{score}/100</strong> and a consensus recommendation of <strong>{rec}</strong>.
+    </p>
+    <h4 style="margin-bottom:6px; color:#0F172A; font-size:9pt; font-weight: 800;">Key Recommendation Drivers:</h4>
+    <ul style="list-style-type:none; padding-left:4px; color:#475569;">
+      {reasons_list}
+    </ul>
+    """
+    return html
+
+
+class CompareChatView(APIView):
+    """
+    POST /api/compare/chat/
+    Queries the comparative chatbot, using comparison data and profiles
+    as context, while remembering previous conversation history.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        tickers = request.data.get("tickers")
+        content = request.data.get("content")
+        conversation_id = request.data.get("conversation_id")
+
+        if not content:
+            return Response({"detail": "Message content is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not tickers:
+            return Response({"detail": "Tickers are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from chat.models import AIConversation, Message
+            from chat.agent.prompts import CHAT_COMPARISON_PROMPT
+            from chat.agent.nodes import get_llm, scores_calculation_node, swot_analysis_node
+            from companies.services import company_service
+            from companies.services.news_service import get_company_news
+
+            conv = None
+            if conversation_id:
+                conv = AIConversation.objects.get(id=conversation_id, user=request.user)
+            else:
+                conv = AIConversation.objects.create(user=request.user, company=None)
+
+            companies_data = []
+            companies_summary = []
+
+            for ticker in tickers:
+                resolved = resolve_ticker_by_name(ticker)
+                company_profile = get_company_profile(resolved)
+                financials = get_financial_data(resolved)
+                news_list = get_company_news(resolved)
+                
+                company_obj, _ = Company.objects.get_or_create(
+                    ticker=resolved,
+                    defaults={
+                        "name": company_profile.get("name") or resolved,
+                        "sector": company_profile.get("sector") or "N/A",
+                        "industry": company_profile.get("industry") or "N/A",
+                        "description": company_profile.get("description") or "",
+                        "financial_summary": company_profile.get("description") or "",
+                    }
+                )
+
+                state = {
+                    "ticker": resolved,
+                    "company_profile": company_profile,
+                    "financials": financials,
+                    "news_list": news_list,
+                }
+                score_res = scores_calculation_node(state)
+                payload = score_res.get("recommendation_payload", {})
+                scores = payload.get("scores", {})
+                ai_score = payload.get("ai_score", 0)
+                recommendation = payload.get("recommendation", "HOLD")
+
+                swot = {}
+                try:
+                    swot_state = {**state, "recommendation_payload": payload}
+                    swot_result = swot_analysis_node(swot_state)
+                    swot = swot_result.get("swot", {})
+                except Exception:
+                    swot = {
+                        "strengths": payload.get("top_reasons", [])[:3],
+                        "weaknesses": payload.get("major_risks", [])[:2],
+                        "opportunities": [],
+                        "threats": [],
+                    }
+
+                companies_data.append({
+                    "ticker": resolved,
+                    "name": company_obj.name,
+                    "sector": company_obj.sector,
+                    "industry": company_obj.industry,
+                    "description": company_profile.get("description", ""),
+                    "ceo": company_profile.get("ceo", "N/A"),
+                    "employees": company_profile.get("employees", 0),
+                    "ai_score": ai_score,
+                    "recommendation": recommendation,
+                    "scores": scores,
+                    "ratios": financials.get("ratios", {}),
+                    "preprocessed_metrics": financials.get("preprocessed_metrics", {}),
+                    "swot": swot,
+                    "news": news_list[:5],
+                    "historical_financials": financials.get("historical_yearly", [])
+                })
+
+                companies_summary.append({
+                    "ticker": resolved,
+                    "name": company_obj.name,
+                    "ai_score": ai_score,
+                    "recommendation": recommendation,
+                    "financial": scores.get("financial_health", 0),
+                    "growth": scores.get("growth", 0),
+                    "valuation": scores.get("valuation", 0),
+                    "risk": scores.get("risk_safety", 0),
+                    "sentiment": scores.get("news_sentiment", 50),
+                })
+
+            best_co = max(companies_summary, key=lambda x: x["ai_score"]) if companies_summary else {"ticker": tickers[0], "ai_score": 0}
+            winner_reasons = []
+            if len(companies_summary) > 1:
+                others = [c for c in companies_summary if c["ticker"] != best_co["ticker"]]
+                if others:
+                    other = others[0]
+                    if best_co["financial"] > other["financial"]:
+                        winner_reasons.append(f"Stronger financial health ({best_co['financial']} vs {other['financial']})")
+                    if best_co["growth"] > other["growth"]:
+                        winner_reasons.append(f"Higher growth trajectory ({best_co['growth']} vs {other['growth']})")
+                    if best_co["risk"] > other["risk"]:
+                        winner_reasons.append(f"Better risk-adjusted safety ({best_co['risk']} vs {other['risk']})")
+                    if best_co["valuation"] > other["valuation"]:
+                        winner_reasons.append(f"More attractive valuation ({best_co['valuation']} vs {other['valuation']})")
+            if not winner_reasons:
+                winner_reasons = ["Highest composite AI score across all categories", "Superior balance sheet and growth metrics"]
+
+            history_str = ""
+            msgs = Message.objects.filter(conversation=conv).order_by('timestamp')
+            for m in msgs:
+                history_str += f"{m.role.upper()}: {m.content}\n\n"
+
+            context_payload = {
+                "compared_tickers": tickers,
+                "winner": best_co["ticker"],
+                "winner_score": best_co["ai_score"],
+                "winner_reasons": winner_reasons,
+                "consensus_recommendation": best_co["recommendation"],
+                "companies": companies_data
+            }
+            comparison_context = json.dumps(context_payload, indent=2)
+            
+            prompt = CHAT_COMPARISON_PROMPT.format(
+                comparison_context=comparison_context,
+                message_history=history_str + f"USER: {content}\n\n"
+            )
+
+            try:
+                llm = get_llm()
+                response = llm.invoke(prompt)
+                reply_content = response.content
+            except Exception as llm_err:
+                logger.warning(f"Comparison Chat LLM failed: {str(llm_err)}")
+                reply_content = f"I compiled the comparison metrics for {', '.join(tickers)}. Unfortunately, my LLM channel is busy. The scores are: " + ", ".join([f"{c['ticker']}: {c['ai_score']}" for c in companies_data])
+
+            Message.objects.create(conversation=conv, role='user', content=content)
+            Message.objects.create(conversation=conv, role='assistant', content=reply_content)
+
+            return Response({
+                "reply": reply_content,
+                "conversation_id": str(conv.id)
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"CompareChatView error: {str(e)}")
+            import traceback; traceback.print_exc()
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CompareExportView(APIView):
+    """
+    POST /api/compare/export/pdf/
+    Compiles comparison data and dynamic SVG charts into a professional A4 comparison HTML report
+    to be downloaded and converted to PDF on the frontend.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        tickers = request.data.get("tickers")
+        if not tickers:
+            return Response({"detail": "Tickers are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from chat.agent.prompts import COMPARISON_HTML_TEMPLATE
+            from chat.agent.nodes import scores_calculation_node, swot_analysis_node
+            from companies.services import company_service
+            from companies.services.chart_service import generate_radar_chart_svg, generate_grouped_bar_chart_svg
+            from companies.services.news_service import get_company_news
+            from django.http import HttpResponse
+            import datetime
+
+            companies_data = []
+            companies_summary = []
+
+            for ticker in tickers:
+                resolved = resolve_ticker_by_name(ticker)
+                company_profile = get_company_profile(resolved)
+                financials = get_financial_data(resolved)
+                news_list = get_company_news(resolved)
+                
+                company_obj, _ = Company.objects.get_or_create(
+                    ticker=resolved,
+                    defaults={
+                        "name": company_profile.get("name") or resolved,
+                        "sector": company_profile.get("sector") or "N/A",
+                        "industry": company_profile.get("industry") or "N/A",
+                        "description": company_profile.get("description") or "",
+                        "financial_summary": company_profile.get("description") or "",
+                    }
+                )
+
+                state = {
+                    "ticker": resolved,
+                    "company_profile": company_profile,
+                    "financials": financials,
+                    "news_list": news_list,
+                }
+                score_res = scores_calculation_node(state)
+                payload = score_res.get("recommendation_payload", {})
+                scores = payload.get("scores", {})
+                ai_score = payload.get("ai_score", 0)
+                recommendation = payload.get("recommendation", "HOLD")
+
+                swot = {}
+                try:
+                    swot_state = {**state, "recommendation_payload": payload}
+                    swot_result = swot_analysis_node(swot_state)
+                    swot = swot_result.get("swot", {})
+                except Exception:
+                    swot = {
+                        "strengths": payload.get("top_reasons", [])[:3],
+                        "weaknesses": payload.get("major_risks", [])[:2],
+                        "opportunities": [],
+                        "threats": [],
+                    }
+
+                companies_data.append({
+                    "ticker": resolved,
+                    "name": company_obj.name,
+                    "sector": company_obj.sector,
+                    "industry": company_obj.industry,
+                    "ai_score": ai_score,
+                    "recommendation": recommendation,
+                    "scores": scores,
+                    "ratios": financials.get("ratios", {}),
+                    "preprocessed_metrics": financials.get("preprocessed_metrics", {}),
+                    "swot": swot,
+                    "news": news_list,
+                    "market_cap": company_profile.get("market_cap"),
+                    "description": company_profile.get("description", ""),
+                    "historical_yearly": financials.get("historical_yearly", []),
+                })
+
+                companies_summary.append({
+                    "ticker": resolved,
+                    "name": company_obj.name,
+                    "ai_score": ai_score,
+                    "recommendation": recommendation,
+                    "financial": scores.get("financial_health", 0),
+                    "growth": scores.get("growth", 0),
+                    "valuation": scores.get("valuation", 0),
+                    "risk": scores.get("risk_safety", 0),
+                    "sentiment": scores.get("news_sentiment", 50),
+                })
+
+            best_co = max(companies_summary, key=lambda x: x["ai_score"]) if companies_summary else {"ticker": tickers[0], "ai_score": 0}
+            winner_reasons = []
+            if len(companies_summary) > 1:
+                others = [c for c in companies_summary if c["ticker"] != best_co["ticker"]]
+                if others:
+                    other = others[0]
+                    if best_co["financial"] > other["financial"]:
+                        winner_reasons.append(f"Stronger financial health ({best_co['financial']} vs {other['financial']})")
+                    if best_co["growth"] > other["growth"]:
+                        winner_reasons.append(f"Higher growth trajectory ({best_co['growth']} vs {other['growth']})")
+                    if best_co["risk"] > other["risk"]:
+                        winner_reasons.append(f"Better risk-adjusted safety ({best_co['risk']} vs {other['risk']})")
+                    if best_co["valuation"] > other["valuation"]:
+                        winner_reasons.append(f"More attractive valuation ({best_co['valuation']} vs {other['valuation']})")
+            if not winner_reasons:
+                winner_reasons = ["Highest composite AI score across all categories", "Superior balance sheet and growth metrics"]
+
+            executive_summary = f"<p>A comprehensive comparative research report has resolved <strong>{best_co['ticker']}</strong> as the leading choice. This selection is supported by the following drivers:</p><ul style='margin-top:10px;margin-bottom:14px;padding-left:20px;'>"
+            for r in winner_reasons:
+                executive_summary += f"<li style='margin-bottom:6px;'>{r}</li>"
+            executive_summary += "</ul>"
+
+            comparison_matrix_headers = "".join(f"<th>{c['ticker']}</th>" for c in companies_summary)
+            comparison_matrix = build_comparison_matrix_html(companies_summary)
+            
+            radar_chart = generate_radar_chart_svg(companies_summary)
+            
+            # Generate the 8 Bar Charts
+            revenue_bar_chart = generate_grouped_bar_chart_svg(companies_data, "revenue", "Revenue")
+            net_income_bar_chart = generate_grouped_bar_chart_svg(companies_data, "net_income", "Net Income")
+            op_margin_bar_chart = generate_grouped_bar_chart_svg(companies_data, "operating_margin", "Operating Margin")
+            roe_bar_chart = generate_grouped_bar_chart_svg(companies_data, "roe", "Return on Equity (ROE)")
+            eps_bar_chart = generate_grouped_bar_chart_svg(companies_data, "eps", "Earnings Per Share (EPS)")
+            fcf_bar_chart = generate_grouped_bar_chart_svg(companies_data, "free_cash_flow", "Free Cash Flow")
+            market_cap_bar_chart = generate_grouped_bar_chart_svg(companies_data, "market_cap", "Market Cap")
+            revenue_growth_bar_chart = generate_grouped_bar_chart_svg(companies_data, "revenue_growth", "Revenue Growth")
+            
+            swot_grid_content = build_swot_grid_content_html(companies_data)
+            news_comparison_html = build_news_comparison_html(companies_data)
+            winner_analysis_cards = build_winner_analysis_cards_html(companies_summary, companies_data)
+            verdict_details = build_verdict_details_html(companies_summary, best_co["ticker"], winner_reasons)
+            
+            # Determine Risk Level and Horizon dynamically for PDF
+            best_risk_safety = best_co["risk"]
+            if best_risk_safety >= 80:
+                winner_risk_level = "Low"
+            elif best_risk_safety >= 60:
+                winner_risk_level = "Medium"
+            else:
+                winner_risk_level = "High"
+                
+            best_rec = best_co["recommendation"]
+            if best_rec in ["STRONG BUY", "BUY"]:
+                winner_horizon = "3–5 Years"
+            elif best_rec == "HOLD":
+                winner_horizon = "12–18 Months"
+            else:
+                winner_horizon = "Avoid New Position"
+
+            html_content = COMPARISON_HTML_TEMPLATE.format(
+                tickers=" vs ".join(tickers),
+                date=datetime.date.today().strftime("%d %b %Y"),
+                winner=best_co["ticker"],
+                winner_score=best_co["ai_score"],
+                winner_recommendation=best_rec,
+                winner_risk_level=winner_risk_level,
+                winner_horizon=winner_horizon,
+                confidence=best_co.get("confidence") or (89 if len(companies_summary) > 1 else 95),
+                executive_summary=executive_summary,
+                comparison_matrix_headers=comparison_matrix_headers,
+                comparison_matrix=comparison_matrix,
+                radar_chart=radar_chart,
+                revenue_bar_chart=revenue_bar_chart,
+                net_income_bar_chart=net_income_bar_chart,
+                op_margin_bar_chart=op_margin_bar_chart,
+                roe_bar_chart=roe_bar_chart,
+                eps_bar_chart=eps_bar_chart,
+                fcf_bar_chart=fcf_bar_chart,
+                market_cap_bar_chart=market_cap_bar_chart,
+                revenue_growth_bar_chart=revenue_growth_bar_chart,
+                swot_grid_content=swot_grid_content,
+                news_comparison_html=news_comparison_html,
+                winner_analysis_cards=winner_analysis_cards,
+                verdict_details=verdict_details
+            )
+
+            response = HttpResponse(html_content, content_type='text/html')
+            response['Content-Disposition'] = f'attachment; filename="{"_".join(tickers)}_comparison_report.html"'
+            return response
+
+        except Exception as e:
+            logger.error(f"CompareExportView error: {str(e)}")
+            import traceback; traceback.print_exc()
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Brain, Shield, BarChart2, Newspaper, Scale, Target, ArrowRight, CheckCircle2, ChevronRight, Activity, Zap, Play } from 'lucide-react';
+import { Brain, Shield, BarChart2, Newspaper, Scale, Target, ArrowRight, CheckCircle2, ChevronRight, Zap, Play } from 'lucide-react';
 
 const FEATURES = [
   {

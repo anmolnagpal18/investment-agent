@@ -22,7 +22,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-dev-key-change-th
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if DEBUG else [h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',') if h.strip()]
 
 # Application definition
 INSTALLED_APPS = [
@@ -127,7 +127,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Configurations
-CORS_ALLOW_ALL_ORIGINS = True # In production, configure specific allowed origins
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+if not CORS_ALLOW_ALL_ORIGINS:
+    CORS_ALLOWED_ORIGINS = [h.strip() for h in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if h.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
 # Django REST Framework Settings

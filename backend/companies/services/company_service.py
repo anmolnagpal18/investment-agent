@@ -1,5 +1,8 @@
 import requests
 import yfinance as yf
+import logging
+
+logger = logging.getLogger(__name__)
 from datetime import timedelta
 from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
@@ -226,7 +229,7 @@ def get_market_summary():
             cache.set("market_summary_cache", result, timeout=60)
             return result
     except Exception as e:
-        print("[ERROR] Failed to fetch market summary:", e)
+        logger.error("Failed to fetch market summary: %s", e)
         
     return None
 
@@ -313,6 +316,6 @@ def get_trending_stocks():
             cache.set("trending_stocks_cache", top_5, timeout=60)
             return top_5
     except Exception as e:
-        print("[ERROR] Failed to fetch trending stocks:", e)
+        logger.error("Failed to fetch trending stocks: %s", e)
         
     return None

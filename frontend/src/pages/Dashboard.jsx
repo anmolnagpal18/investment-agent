@@ -16,7 +16,6 @@ import { useAnimatedCounter } from '../hooks/useAnimatedCounter';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Skeleton, CardSkeleton } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
-import api from '../services/api';
 
 import researchService from '../services/researchService';
 
@@ -169,7 +168,6 @@ function HeroSearch({ onAnalyze }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
   const wrapRef = useRef(null);
 
@@ -971,7 +969,6 @@ function HowItWorksStrip() {
 // ─────────────────────────────────────────────
 export default function Dashboard() {
   const { user } = useAuth();
-  const { success, info } = useToast();
   const navigate = useNavigate();
 
   const {

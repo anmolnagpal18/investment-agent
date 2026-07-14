@@ -3,6 +3,7 @@
 RISK_ANALYSIS_PROMPT = """
 You are a Lead Financial Risk Officer.
 Analyze the company profile, financials, and recent news to identify 3-5 critical risks.
+CRITICAL: Do NOT invent or hallucinate any financial metrics or news. Rely STRICTLY on the provided context.
 
 Company: {company_name} ({ticker})
 Industry: {industry}
@@ -21,6 +22,7 @@ Do not include markdown code fence formatting or any text outside the JSON list.
 SWOT_ANALYSIS_PROMPT = """
 You are a Senior Strategic Analyst.
 Perform a SWOT analysis for {company_name} ({ticker}).
+CRITICAL: Do NOT invent or hallucinate any data. Rely STRICTLY on the provided context.
 
 Company Description: {description}
 Financial Metrics: {financials}
@@ -45,6 +47,7 @@ Do not include markdown code fence formatting or any text outside the JSON objec
 SCORES_CALCULATION_PROMPT = """
 You are a Quantitative Financial Modeling Expert.
 Your task is to assign scores from 0 to 100 for the following 5 categories for {company_name} ({ticker}):
+CRITICAL: Do NOT invent or hallucinate any data. Base your scores STRICTLY on the provided metrics and news.
 
 Company Profile: {description}
 Financial Metrics: {financials}
@@ -71,6 +74,7 @@ Do not include markdown code fence formatting or any text outside the JSON objec
 RECOMMENDATION_THESIS_PROMPT = """
 You are an Investment Committee Chairman.
 Write a formal research thesis for {company_name} ({ticker}) given the following metrics and ratings:
+CRITICAL: Do NOT invent or hallucinate any data. Base your thesis STRICTLY on the provided context.
 
 Recommendation Rating: {recommendation}
 Overall AI Score: {ai_score} / 100
@@ -606,3 +610,406 @@ Requirements:
 - Provide concise, structured bullet points starting with a brief summary.
 - The output should contain only the bullet points.
 """
+
+CHAT_COMPARISON_PROMPT = """You are a Lead Comparative Equity Research Analyst.
+You are assisting an investor in comparing a group of companies side-by-side.
+
+You have access to the following real-time comparative data, including profiles, scores, ratios, SWOT grids, and recent news for the compared companies:
+
+{comparison_context}
+
+MESSAGE HISTORY:
+{message_history}
+
+Please provide a detailed, professional, and quantitatively grounded response to the user's question.
+Follow these rules strictly:
+1. NEVER invent or hallucinate any financial metrics, scores, or numbers. If data is not in the context, explicitly state that it is unavailable.
+2. Directly reference the comparative scores, margins, or ratios in your answers (e.g. comparing PE ratios, ROE, revenue growth, or news sentiment).
+3. If the user asks about risk profiles or margins, explicitly compare the numbers from the context.
+4. Maintain a formal, analytical Wall Street research tone.
+5. Format your output as clean, readable Markdown (bullet points, bold text).
+"""
+
+# Professional A4 Comparison Report Template (Bloomberg/Morningstar style)
+COMPARISON_HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InvestIQ Comparison Report — {tickers}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        @page {{
+            size: A4;
+            margin: 0;
+        }}
+        html, body {{
+            margin: 0;
+            padding: 0;
+            width: 210mm;
+            background: white;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #0F172A;
+            font-size: 9.5pt;
+            line-height: 1.5;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }}
+        .page {{
+            width: 210mm;
+            height: 296mm;
+            padding: 20mm;
+            position: relative;
+            page-break-after: always;
+            break-after: page;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            background: white;
+            box-sizing: border-box;
+            overflow: hidden;
+        }}
+        .page:last-child {{
+            page-break-after: avoid;
+            break-after: avoid;
+        }}
+        .page-footer {{
+            position: absolute;
+            bottom: 20mm;
+            left: 20mm;
+            right: 20mm;
+            padding-top: 8px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 7.5pt;
+            color: #94a3b8;
+        }}
+        .page-footer strong {{ color: #64748b; }}
+        
+        table, .card, .chart-wrap, .swot-grid, .metric-grid, .two-col, .outlook-box, .disclaimer {{
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }}
+        
+        h2 {{ font-size: 14pt; font-weight: 800; color: #0F172A; margin-bottom: 12px; letter-spacing: -0.3px; }}
+        h3 {{ font-size: 10.5pt; font-weight: 700; color: #334155; margin-bottom: 8px; }}
+        p {{ color: #334155; line-height: 1.5; font-size: 9pt; }}
+        .section-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #0F172A;
+        }}
+        .section-header h2 {{ margin-bottom: 0; }}
+        .section-badge {{
+            font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+            color: #0F172A; background: #F1F5F9; border: 1px solid #CBD5E1;
+            border-radius: 4px; padding: 2px 7px;
+        }}
+        .cover {{
+            flex: 1;
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+            border-radius: 6px;
+            padding: 40px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }}
+        .cover-brand {{ display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }}
+        .cover-brand-icon {{
+            width: 36px; height: 36px; border-radius: 6px;
+            background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 900; color: white; font-size: 16px; border: 1px solid rgba(255,255,255,0.2);
+        }}
+        .cover-brand-name {{ font-weight: 900; font-size: 13pt; letter-spacing: 1px; }}
+        .cover-brand-sub {{ font-size: 7.5pt; color: #94a3b8; margin-top: 1px; }}
+        
+        .cover-badge {{
+            display: inline-block; background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3); color: #60A5FA; font-weight: 800; font-size: 8pt;
+            padding: 5px 12px; border-radius: 6px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px;
+        }}
+        .cover-title {{ font-size: 24pt; font-weight: 900; color: white; line-height: 1.15; margin-bottom: 8px; word-wrap: break-word; }}
+        .cover-subtitle {{ font-size: 10.5pt; color: #94A3B8; margin-bottom: 32px; line-height: 1.4; }}
+        .cover-badge-row {{ display: flex; align-items: center; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }}
+        .cover-score-box {{
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px; padding: 12px 18px; min-width: 100px; text-align: center;
+        }}
+        .cover-score-num {{ font-size: 18pt; font-weight: 900; color: #60A5FA; }}
+        .cover-score-label {{ font-size: 7pt; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 3px; }}
+        
+        .cover-meta {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 32px; }}
+        .cover-meta-label {{ font-size: 7.5pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; }}
+        .cover-meta-value {{ color: #cbd5e1; font-weight: 500; margin-top: 1px; font-size: 8.5pt; }}
+        
+        .metric-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }}
+        .metric-card {{ background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 12px; position: relative; }}
+        .metric-card.blue {{ border-left: 4px solid #3B82F6; }}
+        .metric-card.green {{ border-left: 4px solid #10B981; }}
+        .metric-card.purple {{ border-left: 4px solid #8B5CF6; }}
+        .metric-card.amber {{ border-left: 4px solid #F59E0B; }}
+        .metric-card.teal {{ border-left: 4px solid #0D9488; }}
+        .metric-card.red {{ border-left: 4px solid #EF4444; }}
+        .metric-card .label {{ font-size: 7.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #64748B; margin-bottom: 4px; }}
+        .metric-card .value {{ font-size: 12pt; font-weight: 800; color: #0F172A; }}
+        .metric-card .sub {{ font-size: 7.5pt; color: #64748B; margin-top: 2px; }}
+        
+        .data-table {{ width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 14px; }}
+        .data-table th {{ background: #0F172A; color: white; font-weight: 700; padding: 7px 10px; text-align: left; border-bottom: 2px solid #E2E8F0; }}
+        .data-table td {{ padding: 6px 10px; border-bottom: 1px solid #E2E8F0; color: #334155; word-wrap: break-word; }}
+        .data-table tr:nth-child(even) td {{ background: #FAFAFA; }}
+        .data-table td.best {{ background: #ECFDF5; color: #065F46; font-weight: 700; border-left: 2px solid #10B981; }}
+        .data-table td.worst {{ background: #FEF2F2; color: #991B1B; border-left: 2px solid #EF4444; }}
+        .data-table td.neutral {{ background: #FFFBEB; color: #92400E; border-left: 2px solid #F59E0B; }}
+        
+        .card {{ background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px; margin-bottom: 14px; }}
+        .swot-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }}
+        .swot-cell {{ border-radius: 10px; padding: 12px; }}
+        .swot-s {{ background: #ECFDF5; border: 1px solid #A7F3D0; }}
+        .swot-w {{ background: #FEF2F2; border: 1px solid #FCA5A5; }}
+        .swot-o {{ background: #EFF6FF; border: 1px solid #BFDBFE; }}
+        .swot-t {{ background: #FFF7ED; border: 1px solid #FED7AA; }}
+        .swot-title {{ font-size: 8.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }}
+        .swot-s .swot-title {{ color: #065F46; }}
+        .swot-w .swot-title {{ color: #991B1B; }}
+        .swot-o .swot-title {{ color: #1E3A8A; }}
+        .swot-t .swot-title {{ color: #9A3412; }}
+        .swot-list {{ list-style-type: none; }}
+        .swot-list li {{ font-size: 8pt; color: #334155; margin-bottom: 4px; line-height: 1.45; word-wrap: break-word; }}
+        .swot-list li::before {{ content: "• "; color: inherit; font-weight: bold; margin-right: 4px; }}
+        
+        .charts-grid-2x2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }}
+        .chart-container {{ background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px; height: 210px; box-sizing: border-box; }}
+        .chart-title {{ font-size: 8.5pt; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; text-align: center; }}
+        
+        .news-card {{ border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }}
+        .news-card.positive {{ background: #F0FDF4; border: 1px solid #BBF7D0; border-left: 3px solid #10B981; }}
+        .news-card.negative {{ background: #FFF1F2; border: 1px solid #FECDD3; border-left: 3px solid #EF4444; }}
+        .news-card.neutral {{ background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 3px solid #64748B; }}
+        .news-card .headline {{ font-size: 8pt; font-weight: 700; color: #0F172A; line-height: 1.3; margin-bottom: 3px; }}
+        .news-card .meta {{ font-size: 7pt; color: #64748B; }}
+
+        .disclaimer {{ background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 3px solid #64748B; border-radius: 8px; padding: 10px 12px; font-size: 7.5pt; color: #475569; line-height: 1.5; }}
+        .outlook-box {{ background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 3px solid #0F172A; border-radius: 8px; padding: 14px; font-size: 9pt; color: #0F172A; line-height: 1.6; margin-bottom: 14px; }}
+        
+        .two-col {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
+        .three-col {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }}
+        .verdict-hero {{ background: #0F172A; color: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; }}
+        .verdict-badge {{ display: inline-block; background: #10B981; color: white; font-weight: 950; font-size: 9pt; padding: 4px 10px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }}
+    </style>
+</head>
+<body>
+
+<!-- PAGE 1: COVER PAGE -->
+<div class="page">
+  <div class="cover">
+    <div>
+      <div class="cover-brand">
+        <div class="cover-brand-icon">I</div>
+        <div>
+          <div class="cover-brand-name">InvestIQ</div>
+          <div class="cover-brand-sub">Institutional Investment Research</div>
+        </div>
+      </div>
+      <div class="cover-badge">Comparative Equity Research</div>
+      <h1 class="cover-title">{tickers}</h1>
+      <p class="cover-subtitle">Professional side-by-side benchmarking analysis and deterministic scoring recommendation.</p>
+    </div>
+    
+    <div>
+      <div class="cover-badge-row">
+        <div class="cover-score-box">
+          <div class="cover-score-num">{winner}</div>
+          <div class="cover-score-label">Top Selection</div>
+        </div>
+        <div class="cover-score-box">
+          <div class="cover-score-num">{winner_score}</div>
+          <div class="cover-score-label">AI Score</div>
+        </div>
+        <div class="cover-score-box">
+          <div class="cover-score-num">{confidence}%</div>
+          <div class="cover-score-label">Confidence</div>
+        </div>
+      </div>
+      
+      <div class="cover-meta">
+        <div>
+          <div class="cover-meta-label">Prepared For</div>
+          <div class="cover-meta-value">Self-Directed Investor</div>
+        </div>
+        <div>
+          <div class="cover-meta-label">Date Generated</div>
+          <div class="cover-meta-value">{date}</div>
+        </div>
+      </div>
+      
+      <div style="font-size:7.5pt;color:#94a3b8;border-top:1px solid rgba(255,255,255,0.1);padding-top:14px;">
+        This comparison report was generated by the InvestIQ multi-agent benchmarking pipeline using real-time data from Yahoo Finance.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 2: EXECUTIVE SUMMARY -->
+<div class="page">
+  <div class="section-header"><h2>Executive Summary & winners</h2><span class="section-badge">Page 2 of 8</span></div>
+  <div class="card" style="line-height:1.6;font-size:9pt;margin-bottom:16px;color:#334155;">
+    {executive_summary}
+  </div>
+  <h3 style="margin-bottom:10px;">Category Breakdown Winners</h3>
+  <div style="display:flex;flex-direction:column;gap:10px;">
+    {winner_analysis_cards}
+  </div>
+  <div class="page-footer"><strong>InvestIQ</strong><span>{tickers} &nbsp;·&nbsp; {date} &nbsp;·&nbsp; Page 2 of 8</span><span>Comparison Report</span></div>
+</div>
+
+<!-- PAGE 3: COMPARISON MATRIX -->
+<div class="page">
+  <div class="section-header"><h2>Comparison Matrix</h2><span class="section-badge">Page 3 of 8</span></div>
+  <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start; height: 180mm;">
+    <div>
+      <h3 style="margin-bottom:10px;">Score Weighting Metrics</h3>
+      <table class="data-table" style="margin-bottom:0; font-size: 8.5pt;">
+        <thead>
+          <tr>
+            <th>Category</th>
+            {comparison_matrix_headers}
+          </tr>
+        </thead>
+        <tbody>
+          {comparison_matrix}
+        </tbody>
+      </table>
+    </div>
+    <div style="border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px; background: #F8FAFC; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+      <h3 style="margin-bottom:10px; font-size: 9.5pt;">Scoring Radar Analysis</h3>
+      <div style="width: 100%; height: 130mm; display: flex; align-items: center; justify-content: center;">
+        {radar_chart}
+      </div>
+    </div>
+  </div>
+  <div class="page-footer"><strong>InvestIQ</strong><span>{tickers} &nbsp;·&nbsp; {date} &nbsp;·&nbsp; Page 3 of 8</span><span>Comparison Report</span></div>
+</div>
+
+<!-- PAGE 4: FINANCIAL CHARTS -->
+<div class="page">
+  <div class="section-header"><h2>Financial charts</h2><span class="section-badge">Page 4 of 8</span></div>
+  <h3 style="margin-bottom:8px;">Growth & scale charts</h3>
+  <div class="charts-grid-2x2">
+    <div class="chart-container">
+      <div class="chart-title">Revenue comparison ($)</div>
+      {revenue_bar_chart}
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Net income comparison ($)</div>
+      {net_income_bar_chart}
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Market capitalization ($)</div>
+      {market_cap_bar_chart}
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Revenue growth (%)</div>
+      {revenue_growth_bar_chart}
+    </div>
+  </div>
+  <div class="page-footer"><strong>InvestIQ</strong><span>{tickers} &nbsp;·&nbsp; {date} &nbsp;·&nbsp; Page 4 of 8</span><span>Comparison Report</span></div>
+</div>
+
+<!-- PAGE 5: VALUATION & PROFITABILITY -->
+<div class="page">
+  <div class="section-header"><h2>Valuation &amp; Profitability charts</h2><span class="section-badge">Page 5 of 8</span></div>
+  <h3 style="margin-bottom:8px;">Efficiency & margins charts</h3>
+  <div class="charts-grid-2x2">
+    <div class="chart-container">
+      <div class="chart-title">Operating margin (%)</div>
+      {op_margin_bar_chart}
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Return on equity (ROE) (%)</div>
+      {roe_bar_chart}
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Earnings per share (EPS) ($)</div>
+      {eps_bar_chart}
+    </div>
+    <div class="chart-container">
+      <div class="chart-title">Free cash flow comparison ($)</div>
+      {fcf_bar_chart}
+    </div>
+  </div>
+  <div class="page-footer"><strong>InvestIQ</strong><span>{tickers} &nbsp;·&nbsp; {date} &nbsp;·&nbsp; Page 5 of 8</span><span>Comparison Report</span></div>
+</div>
+
+<!-- PAGE 6: RISK & SWOT -->
+<div class="page">
+  <div class="section-header"><h2>Risk Analysis &amp; SWOT</h2><span class="section-badge">Page 6 of 8</span></div>
+  <div style="height: 180mm; overflow: hidden; display: flex; flex-direction: column; gap: 10px;">
+    {swot_grid_content}
+  </div>
+  <div class="page-footer"><strong>InvestIQ</strong><span>{tickers} &nbsp;·&nbsp; {date} &nbsp;·&nbsp; Page 6 of 8</span><span>Comparison Report</span></div>
+</div>
+
+<!-- PAGE 7: NEWS COMPARISON -->
+<div class="page">
+  <div class="section-header"><h2>News comparison &amp; Media sentiment</h2><span class="section-badge">Page 7 of 8</span></div>
+  <h3 style="margin-bottom:10px;">Recent media reporting</h3>
+  {news_comparison_html}
+  <div class="page-footer"><strong>InvestIQ</strong><span>{tickers} &nbsp;·&nbsp; {date} &nbsp;·&nbsp; Page 7 of 8</span><span>Comparison Report</span></div>
+</div>
+
+<!-- PAGE 8: FINAL RECOMMENDATION -->
+<div class="page">
+  <div class="section-header"><h2>Final Recommendation</h2><span class="section-badge">Page 8 of 8</span></div>
+  <div class="verdict-hero">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+      <div>
+        <p style="color:#94A3B8; font-size: 7.5pt; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Investment Verdict Choice</p>
+        <h3 style="color:white; font-size: 18pt; font-weight:900; margin-bottom: 0;">{winner}</h3>
+      </div>
+      <div class="verdict-badge">AI Score: {winner_score}/100</div>
+    </div>
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;">
+      <div>
+        <p style="color:#64748B; font-size:7pt; text-transform:uppercase;">Recommendation</p>
+        <p style="color:white; font-size:10.5pt; font-weight:700; margin-top:2px;">{winner_recommendation}</p>
+      </div>
+      <div>
+        <p style="color:#64748B; font-size:7pt; text-transform:uppercase;">Risk profile</p>
+        <p style="color:white; font-size:10.5pt; font-weight:700; margin-top:2px;">{winner_risk_level} Risk</p>
+      </div>
+      <div>
+        <p style="color:#64748B; font-size:7pt; text-transform:uppercase;">Investment Horizon</p>
+        <p style="color:white; font-size:10.5pt; font-weight:700; margin-top:2px;">{winner_horizon}</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="outlook-box" style="margin-bottom:14px;">
+    {verdict_details}
+  </div>
+  
+  <div class="disclaimer">
+    <strong>IMPORTANT LEGAL DISCLAIMER:</strong> This comparative benchmarking report was generated by the InvestIQ quantitative AI research system using data points from Yahoo Finance. This report is for <strong>educational and informational purposes only</strong> and does not represent professional financial or investment advice, nor an offer or solicitation to purchase any securities. Market conditions are highly volatile, and AI calculations can suffer from omissions or errors. Perform independent due diligence or consult a licensed advisor before executing any trades.
+  </div>
+  
+  <div class="page-footer" style="margin-top:20px;">
+    <strong>InvestIQ &nbsp;·&nbsp; Comparison Report</strong>
+    <span>{tickers} &nbsp;·&nbsp; {date} &nbsp;·&nbsp; Page 8 of 8</span>
+    <span style="color:#94a3b8;">© InvestIQ. Not financial advice.</span>
+  </div>
+</div>
+
+</body>
+</html>
+"""
+

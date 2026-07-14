@@ -11,7 +11,9 @@ from research.views import (
     FavoritesView,
     ExportView,
     ExplainView,
-    ReportStatusView
+    ReportStatusView,
+    CompareChatView,
+    CompareExportView
 )
 
 urlpatterns = [
@@ -24,6 +26,8 @@ urlpatterns = [
     path('api/analyze/', AnalyzeView.as_view(), name='api-analyze'),
     path('api/chat/', ChatView.as_view(), name='api-chat'),
     path('api/compare/', CompareView.as_view(), name='api-compare'),
+    path('api/compare/chat/', CompareChatView.as_view(), name='api-compare-chat'),
+    path('api/compare/export/pdf/', CompareExportView.as_view(), name='api-compare-export-pdf'),
     path('api/history/', HistoryView.as_view(), name='api-history'),
     path('api/favorites/', FavoritesView.as_view(), name='api-favorites'),
     path('api/export/pdf/', ExportView.as_view(), name='api-export-pdf'),

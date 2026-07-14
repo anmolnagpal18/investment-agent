@@ -25,6 +25,22 @@ export const researchService = {
     return response.data;
   },
 
+  compareChat: async (tickers, content, conversationId = null) => {
+    const response = await api.post('/compare/chat/', {
+      tickers,
+      content,
+      conversation_id: conversationId
+    });
+    return response.data;
+  },
+
+  compareExportPdf: async (tickers) => {
+    const response = await api.post('/compare/export/pdf/', { tickers }, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
   getHistory: async () => {
     const response = await api.get('/history/');
     return response.data;

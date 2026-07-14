@@ -1,5 +1,8 @@
 import time
 import yfinance as yf
+import logging
+
+logger = logging.getLogger(__name__)
 from rest_framework.exceptions import ValidationError
 from .company_service import resolve_ticker_by_name
 
@@ -196,7 +199,7 @@ def get_dashboard_news():
             cache.set("dashboard_news_cache", news_data, timeout=60)
             return news_data
     except Exception as e:
-        print("[ERROR] Failed to fetch dashboard news:", e)
+        logger.error("Failed to fetch dashboard news: %s", e)
         
     return None
 

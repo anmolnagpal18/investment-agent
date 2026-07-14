@@ -539,14 +539,12 @@ def risk_analysis_node(state: AgentState) -> dict:
         risks = parse_json_response(response.content)
         return {"risks": risks}
     except Exception as e:
-        fallback = [
-            "Operational risk: competitive pressures in segment.",
-            "Foundry concentration: reliant on third-party supply hubs.",
-            "Market valuation multiples compression threat."
-        ]
+        # The LLM failed to generate a valid risk analysis.
+        # We return an empty list of risks rather than hallucinating fake data,
+        # ensuring the application only surfaces genuine analysis to the user.
         return {
-            "risks": fallback,
-            "errors": state.get("errors", []) + [f"Risk Node error: {str(e)}"]
+            "risks": [],
+            "errors": state.get("errors", []) + [f"Risk analysis generation failed: {str(e)}"]
         }
 
 
@@ -741,18 +739,20 @@ def recommendation_thesis_node(state: AgentState) -> dict:
         }
     except Exception as e:
         logger.error(f"Thesis Generator failed: {str(e)}")
+        # The thesis generation failed. Rather than hallucinating generic advice,
+        # we provide empty strings so the UI can gracefully handle the missing data.
         fallback_thesis = {
-            "reasoning": "Fundamental indicators are stable, but macroeconomic valuation cyclical levels warrant careful positioning. Long term catalysts remain active, but near term consolidation suggests a HOLD position.",
-            "top_reasons": ["Consistent cash flow margin safety", "Market capitalization scale moat", "Earnings growth prospects"],
-            "major_risks": ["Expensive relative valuation multiples", "Geopolitical export controls", "Macroeconomic headwinds cyclical risk"],
-            "future_outlook": "We expect flat-to-stable performance in the next 12-18 months, with potential upside in mid-cycle recovery sectors."
+            "reasoning": "Analysis reasoning unavailable due to generation error.",
+            "top_reasons": [],
+            "major_risks": [],
+            "future_outlook": "Outlook unavailable."
         }
         merged_payload = payload.copy()
         merged_payload.update(fallback_thesis)
         return {
             "recommendation_payload": merged_payload,
             "related_tickers": peers,
-            "errors": state.get("errors", []) + [f"Recommendation Thesis Node error: {str(e)}"]
+            "errors": state.get("errors", []) + [f"Recommendation thesis generation failed: {str(e)}"]
         }
 
 
@@ -889,9 +889,6 @@ def report_generator_node(state: AgentState) -> dict:
             )
             logger.info("Research history logged successfully.")
         except Exception as db_err:
-            import traceback
-            print(f"[ERROR] save_report_node DB commit failed: {db_err}")
-            traceback.print_exc()
             logger.error(f"Failed to commit report/history to DB: {str(db_err)}")
 
     # Mark status as completed
@@ -1357,11 +1354,11 @@ def generate_pdf_background(report_id: str, state_dict: dict):
     import datetime
     
     close_old_connections()
-    print(f"[DEBUG LOGGING] PDF Started for Report ID: {report_id}")
+    logger.debug(f"PDF Started for Report ID: {report_id}")
     try:
         saved_report = SavedReport.objects.get(id=report_id)
         if saved_report.pdf_status == 'ready' and saved_report.pdf_file:
-            print(f"[DEBUG LOGGING] HTML report already exists for {saved_report.company.ticker}, skipping regeneration.")
+            logger.debug(f"HTML report already exists for {saved_report.company.ticker}, skipping regeneration.")
             return
         saved_report.pdf_status = 'generating'
         saved_report.save()
@@ -1372,7 +1369,7 @@ def generate_pdf_background(report_id: str, state_dict: dict):
         # 1. Compile HTML report
         report_html = build_report_html(state_dict, report_id)
         html_len = len(report_html)
-        print(f"[DEBUG LOGGING] HTML Generated for {ticker}. Length: {html_len}")
+        logger.debug(f"HTML Generated for {ticker}. Length: {html_len}")
         
         # 2. Save HTML & Markdown directly to database
         saved_report.report_html = report_html
@@ -1389,12 +1386,9 @@ def generate_pdf_background(report_id: str, state_dict: dict):
         saved_report.pdf_generated_at = timezone.now()
         saved_report.save()
         
-        print(f"[DEBUG LOGGING] PDF Generated & Saved for {ticker} at {saved_report.pdf_file.url}")
+        logger.debug(f"PDF Generated & Saved for {ticker} at {saved_report.pdf_file.url}")
         logger.info(f"Background PDF/HTML Generation SUCCESS for report_id {report_id}")
     except Exception as e:
-        print(f"[DEBUG LOGGING] PDF Generation FAILED for report_id {report_id}: {str(e)}")
-        import traceback
-        traceback.print_exc()
         logger.error(f"Background PDF/HTML Generation FAILED for report_id {report_id}: {str(e)}")
         try:
             saved_report = SavedReport.objects.get(id=report_id)

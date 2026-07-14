@@ -31,18 +31,6 @@ const SUGGESTION_DB = [
   'Bajaj Finance','HDFC Bank','Hindustan Unilever','Wipro','Walmart','Walt Disney',
 ];
 
-const ANALYSIS_NODES = [
-  { key: 'company_research',   label: 'Company Research',   icon: Globe,       color: '#3b82f6' },
-  { key: 'financial_analysis', label: 'Financial Analysis', icon: BarChart2,   color: '#8b5cf6' },
-  { key: 'news_analysis',      label: 'News Analysis',      icon: Newspaper,   color: '#06b6d4' },
-  { key: 'risk_analysis',      label: 'Risk Assessment',    icon: Shield,      color: '#f59e0b' },
-  { key: 'swot_analysis',      label: 'SWOT Analysis',      icon: Target,      color: '#ec4899' },
-  { key: 'scores_calculation', label: 'Scoring Engine',     icon: Activity,    color: '#10b981' },
-  { key: 'recommendation',     label: 'AI Recommendation',  icon: Brain,       color: '#a78bfa' },
-  { key: 'report_generator',   label: 'Generating Report',  icon: FileText,    color: '#f472b6' },
-];
-const NODE_KEYS = ANALYSIS_NODES.map(n => n.key);
-
 const CATEGORY_WEIGHTS = {
   financial_health: { label: 'Financial Health', weight: 0.30, color: '#3b82f6' },
   growth:           { label: 'Growth',           weight: 0.25, color: '#8b5cf6' },
@@ -188,7 +176,7 @@ function ScoreRing({ score, size = 90, strokeWidth = 8, color = '#3b82f6' }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// ① LIVE ANALYSIS PROGRESS  (Perplexity-style)
+// LIVE ANALYSIS PROGRESS (Perplexity-style)
 // ─────────────────────────────────────────────────────────────
 const ANALYSIS_STEPS = [
   { key: 'company_profile',      label: 'Fetching Company Profile' },
@@ -786,13 +774,6 @@ function RecommendationCard({ payload, ticker, onExplainScore, onExplainConfiden
 // ─────────────────────────────────────────────────────────────
 // FINANCIAL CHARTS
 // ─────────────────────────────────────────────────────────────
-function generateDemo(metric, period) {
-  const base = { revenue:150, profit:30, cashflow:45, debt:60, roe:18, eps:4.5 }[metric]||100;
-  const labels = period==='quarterly'
-    ? ['Q1\'22','Q2\'22','Q3\'22','Q4\'22','Q1\'23','Q2\'23','Q3\'23','Q4\'23','Q1\'24','Q2\'24']
-    : ['2019','2020','2021','2022','2023','2024'];
-  return labels.map((p,i) => ({ period:p, value: base*(1+i*0.1+(Math.random()-0.4)*0.06) }));
-}
 
 function FinancialCharts({ ticker }) {
   const [data, setData]     = useState(null);
@@ -1331,7 +1312,7 @@ function ExplainScoreModal({ category, score, ticker, onClose }) {
       .then(r => setExplanation(r.reply||'Explanation unavailable.'))
       .catch(() => { toastError('Could not generate explanation'); setExplanation('Explanation unavailable.'); })
       .finally(() => setLoading(false));
-  }, []);
+  }, [ticker, category, score, toastError]);
 
   return (
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
@@ -1555,9 +1536,6 @@ function PdfPreviewModal({ ticker, htmlUrl, reportHtml, pdfStatus, reportData, o
 // ─────────────────────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────
-// MAIN PAGE
-// ─────────────────────────────────────────────────────────────
 export default function ResearchWorkspace() {
   const [searchParams] = useSearchParams();
   const navigate       = useNavigate();
@@ -1565,7 +1543,6 @@ export default function ResearchWorkspace() {
 
   const [query,         setQuery]         = useState(searchParams.get('q')||'');
   const [analysisState, setAnalysisState] = useState(null); // null|'loading'|'done'|'error'
-  const [activeNode,    setActiveNode]    = useState('company_research');
   const [stepsState,    setStepsState]    = useState([]);
   const [result,        setResult]        = useState(null);
   const [isFavorite,    setIsFavorite]    = useState(false);
@@ -1746,7 +1723,7 @@ export default function ResearchWorkspace() {
               setAnalysisState('done');
               toastError('PDF report generation failed. You can retry it from the dashboard.');
             }
-          } catch (e) {
+          } catch {
             if (attempts > 30) {
               clearInterval(pdfPollInterval);
               toastError('PDF polling timed out.');
@@ -1911,7 +1888,7 @@ export default function ResearchWorkspace() {
       {/* Search */}
       <WorkspaceSearch onSearch={handleAnalyze} initialQuery={query} isLoading={analysisState==='loading'}/>
 
-      {/* ① Live progress */}
+      {/* Live progress */}
       <AnimatePresence>
         {analysisState==='loading' && (
           <LiveProgress stepsState={stepsState} companyName={query}/>
@@ -1956,10 +1933,10 @@ export default function ResearchWorkspace() {
         </motion.div>
       )}
 
-      {/* ② Streaming Results */}
+      {/* Streaming Results */}
       {analysisState==='done' && result && (
         <div className="space-y-6">
-          {/* S0 — Company */}
+          {/* Company Header */}
           <StreamSection index={0}>
             {companyData && (
               <CompanyCard data={companyData} isFavorite={isFavorite}
@@ -1971,7 +1948,7 @@ export default function ResearchWorkspace() {
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">
             {/* LEFT */}
             <div className="space-y-6">
-              {/* S1 — Recommendation */}
+              {/* Recommendation Overview */}
               <StreamSection index={1}>
                 {payload && (
                   <RecommendationCard
@@ -1988,22 +1965,22 @@ export default function ResearchWorkspace() {
                 )}
               </StreamSection>
 
-              {/* S2 — Charts */}
+              {/* Financial Charts */}
               <StreamSection index={2}>
                 <FinancialCharts ticker={result.ticker}/>
               </StreamSection>
 
-              {/* S3 — SWOT */}
+              {/* SWOT Analysis */}
               <StreamSection index={3}>
                 <SwotCard swot={swotData}/>
               </StreamSection>
 
-              {/* S4 — News */}
+              {/* News Section */}
               <StreamSection index={4}>
                 <NewsCard ticker={result.ticker}/>
               </StreamSection>
 
-              {/* S5 — Related */}
+              {/* Related Companies */}
               <StreamSection index={5}>
                 <RelatedCompanies ticker={result.ticker} onAnalyze={handleAnalyze}/>
               </StreamSection>
@@ -2098,10 +2075,7 @@ export default function ResearchWorkspace() {
             if (!url) return '';
             if (url.startsWith('http')) return url;
             let base = api.defaults.baseURL.replace(/\/api$/, '');
-            // If parent is localhost, align backend url to localhost for connection security
-            if (window.location.hostname === 'localhost') {
-              base = base.replace('127.0.0.1', 'localhost');
-            }
+            // Use environment base URL for media files
             return `${base}${url}`;
           };
           return (

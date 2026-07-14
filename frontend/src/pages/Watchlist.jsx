@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Heart, HeartOff, Search, ArrowRight, Loader2, RefreshCw, DollarSign, TrendingUp, TrendingDown, Plus } from 'lucide-react';
+import { Heart, HeartOff, Search, ArrowRight, Loader2, RefreshCw, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import researchService from '../services/researchService';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { CardSkeleton } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
 

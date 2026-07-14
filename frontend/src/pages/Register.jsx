@@ -48,7 +48,7 @@ export default function Register() {
     
     try {
       // 1. Perform registration
-      const data = await authService.register(
+      await authService.register(
         username.trim(),
         email.trim(),
         password,
@@ -63,7 +63,7 @@ export default function Register() {
         const loginData = await authService.login(username.trim(), password);
         login(loginData.access, loginData.refresh, null);
         navigate('/dashboard');
-      } catch (loginErr) {
+      } catch {
         // Fallback: If auto-login fails due to server sync, redirect to login page
         navigate('/login');
       }
