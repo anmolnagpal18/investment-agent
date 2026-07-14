@@ -45,10 +45,20 @@ class AnalyzeView(APIView):
 
             # 2. Trigger LangGraph Pipeline
             graph = build_research_graph()
+            
+            # Create a conversation to track status and for follow-up chat
+            from chat.models import AIConversation
+            conv = AIConversation.objects.create(
+                user=request.user,
+                company=company_obj,
+                status="company_research"
+            )
+            
             initial_state = {
                 "ticker": company_obj.ticker,
                 "user_query": f"Complete investment analysis query for {company_obj.name}",
                 "user_id": request.user.id,
+                "conversation_id": str(conv.id),
                 "company_profile": profile
             }
 
@@ -148,6 +158,7 @@ class AnalyzeView(APIView):
                 t.start()
 
             return Response({
+                "conversation_id": str(conv.id),
                 "report_id": str(report.id) if report else None,
                 "ticker": company_obj.ticker,
                 "name": company_obj.name,
