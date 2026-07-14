@@ -130,6 +130,11 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Configurations
+# Allow configuring a single origin env var (`CORS_ALLOWED_ORIGIN`) or
+# a comma-separated list (`CORS_ALLOWED_ORIGINS`). Normalize entries so
+# they contain only scheme + host[:port] (no path) to satisfy django-cors-headers.
+from urllib.parse import urlparse
+
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False').lower() == 'true'
 
 default_origins = [
@@ -138,11 +143,37 @@ default_origins = [
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173',
     'https://investment-agent-33ju-nine.vercel.app',
-    'https://investment-agent-33ju-nine.vercel.app/',
 ]
 
-env_origins = [h.strip() for h in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if h.strip()]
-CORS_ALLOWED_ORIGINS = env_origins or default_origins
+# Gather raw origins from supported env vars
+raw_origins = []
+single = os.getenv('CORS_ALLOWED_ORIGIN', '').strip()
+if single:
+    raw_origins += [o.strip() for o in single.split(',') if o.strip()]
+multi = os.getenv('CORS_ALLOWED_ORIGINS', '').strip()
+if multi:
+    raw_origins += [o.strip() for o in multi.split(',') if o.strip()]
+
+if not raw_origins:
+    raw_origins = default_origins
+
+def _normalize_origin(o: str) -> str:
+    o = o.strip()
+    # remove trailing slash if present
+    if o.endswith('/'):
+        o = o.rstrip('/')
+    # add https scheme if missing
+    if not o.startswith('http://') and not o.startswith('https://'):
+        o = 'https://' + o
+    parsed = urlparse(o)
+    if not parsed.hostname:
+        return o
+    origin = f"{parsed.scheme}://{parsed.hostname}"
+    if parsed.port:
+        origin += f":{parsed.port}"
+    return origin
+
+CORS_ALLOWED_ORIGINS = [_normalize_origin(x) for x in raw_origins]
 CORS_ALLOWED_ORIGIN_REGEXES = [r'^https://.*\.vercel\.app$']
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = ['*']
