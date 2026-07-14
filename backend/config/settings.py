@@ -22,7 +22,9 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-dev-key-change-th
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',') if DEBUG else [h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',') if h.strip()]
+default_hosts = ['localhost', '127.0.0.1', 'investment-agent-vckr.onrender.com']
+env_hosts = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',') if h.strip()]
+ALLOWED_HOSTS = env_hosts or default_hosts if not DEBUG else ['*']
 
 # Application definition
 INSTALLED_APPS = [
@@ -127,10 +129,24 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Configurations
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-if not CORS_ALLOW_ALL_ORIGINS:
-    CORS_ALLOWED_ORIGINS = [h.strip() for h in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if h.strip()]
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False').lower() == 'true'
+
+default_origins = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'https://investment-agent-33ju-nine.vercel.app',
+    'https://investment-agent-33ju-nine.vercel.app/',
+]
+
+env_origins = [h.strip() for h in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if h.strip()]
+CORS_ALLOWED_ORIGINS = env_origins or default_origins
+CORS_ALLOWED_ORIGIN_REGEXES = [r'^https://.*\.vercel\.app$']
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = ['*']
+CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+CORS_PREFLIGHT_MAX_AGE = 600
 
 # Django REST Framework Settings
 REST_FRAMEWORK = {
