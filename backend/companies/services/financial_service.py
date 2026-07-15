@@ -171,8 +171,8 @@ def get_financial_data(ticker_or_name):
                     interest_row_local = get_df_row(fin, ['Interest Expense', 'interestExpense'])
                     if interest_row_local is not None:
                         latest_interest = abs(float(interest_row_local.iloc[0]))
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Could not parse interest expense from financial statement: {e}")
             if latest_interest > 0:
                 preprocessed["interest_coverage"] = round(latest["operating_income"] / latest_interest, 2)
             else:

@@ -128,47 +128,11 @@ def get_company_profile(ticker_or_name):
     except Exception as e:
         # Fallback to expired cache if external API or internet fails
         if company_obj and company_obj.financial_summary:
+            logger.warning(f"Using expired cache for {ticker} due to API failure: {e}")
             return company_obj.financial_summary
             
-        # If no cache exists, generate a stable mock profile to prevent crashing
-        mock_names = {
-            "AAPL": ("Apple Inc.", "Technology", "Consumer Electronics", "Tim Cook"),
-            "NVDA": ("NVIDIA Corporation", "Technology", "Semiconductors", "Jensen Huang"),
-            "MSFT": ("Microsoft Corporation", "Technology", "Software—Infrastructure", "Satya Nadella"),
-            "TSLA": ("Tesla, Inc.", "Consumer Cyclical", "Auto Manufacturers", "Elon Musk"),
-            "AMZN": ("Amazon.com, Inc.", "Consumer Cyclical", "Internet Retail", "Andy Jassy"),
-            "RELIANCE": ("Reliance Industries Limited", "Energy", "Oil & Gas", "Mukesh Ambani"),
-        }
-        
-        name, sector, industry, ceo = mock_names.get(ticker.upper(), (f"{ticker.upper()} Corp", "Technology", "Application Software", "Executive Officer"))
-        
-        profile_data = {
-            "ticker": ticker,
-            "exchange": "NASDAQ" if not ticker.endswith(".NS") else "NSE",
-            "name": name,
-            "sector": sector,
-            "industry": industry,
-            "description": f"{name} is a global leader in its market segment, focusing on high-growth operations and technological innovation.",
-            "website": f"https://www.{ticker.lower()}.com",
-            "ceo": ceo,
-            "employees": 120000,
-            "market_cap": 1500000000000,
-            "country": "India" if ticker.endswith(".NS") else "United States",
-            "currency": "INR" if ticker.endswith(".NS") else "USD",
-        }
-        
-        # Save mock cache to database so it persists
-        Company.objects.update_or_create(
-            ticker=ticker,
-            defaults={
-                "name": profile_data["name"],
-                "sector": profile_data["sector"],
-                "industry": profile_data["industry"],
-                "description": profile_data["description"],
-                "financial_summary": profile_data
-            }
-        )
-        return profile_data
+        logger.exception(f"Failed to fetch profile for {ticker} and no cache available.")
+        raise ValidationError(f"Could not retrieve company profile for {ticker}. The data provider might be rate-limiting. Please try again later.")
 
 
 def is_market_open(timezone_str):

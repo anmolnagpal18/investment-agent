@@ -1,9 +1,32 @@
 import api from './api';
 
 export const researchService = {
-  analyze: async (ticker) => {
-    const response = await api.post('/analyze/', { ticker });
-    return response.data;
+  analyze: async (ticker, options = {}) => {
+    let attempt = 0;
+    while (attempt <= 1) {
+      try {
+        const response = await api.post('/analyze/', { ticker }, {
+          signal: options.signal,
+          timeout: options.timeout || 60000 // 60s default timeout
+        });
+        return response.data;
+      } catch (error) {
+        if (api.isCancel(error) || error.name === 'CanceledError') {
+          throw error; // Don't retry cancelled requests
+        }
+        attempt++;
+        if (attempt > 1) {
+          const structuredError = {
+            message: error?.response?.data?.detail || error?.response?.data?.message || error?.message || 'Analysis failed. Please try again.',
+            status: error?.response?.status || 500,
+            originalError: error
+          };
+          throw structuredError;
+        }
+        // Small delay before retry
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
   },
 
   chat: async (ticker, content, conversationId = null) => {

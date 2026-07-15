@@ -1,9 +1,13 @@
 import requests
 import yfinance as yf
+import logging
 from rest_framework.exceptions import ValidationError
 from companies.models import Company
 from research.models import SavedReport
 from .company_service import resolve_ticker_by_name
+import concurrent.futures
+
+logger = logging.getLogger(__name__)
 
 # Simple in-memory cache for peer metadata
 _PEER_METADATA_CACHE = {}
@@ -26,13 +30,15 @@ def get_related_companies(ticker_or_name):
         primary_industry = primary_co.industry
     except Company.DoesNotExist:
         try:
-            stock = yf.Ticker(ticker)
-            info = stock.info
+            def fetch_primary_info():
+                return yf.Ticker(ticker).info
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                info = executor.submit(fetch_primary_info).result(timeout=5.0)
             if info:
                 primary_sector = info.get("sector", "N/A")
                 primary_industry = info.get("industry", "N/A")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch primary sector/industry from yfinance for {ticker}: {e}")
 
     peers_list = []
     
@@ -50,8 +56,8 @@ def get_related_companies(ticker_or_name):
             if results:
                 recommended = results[0].get('recommendedSymbols', [])
                 peers_list = [item.get('symbol') for item in recommended if 'symbol' in item][:5]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch Yahoo Finance recommendations for {ticker}: {e}")
 
     # 2. Fallback: Query local database matching sector and industry
     if not peers_list:
@@ -67,8 +73,8 @@ def get_related_companies(ticker_or_name):
                     sector=primary_sector
                 ).exclude(ticker=ticker)[:5]
                 peers_list = [c.ticker for c in db_sector_peers]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed DB fallback for peers of {ticker}: {e}")
 
     # 3. Default fallback list based on well-known sectors
     if not peers_list:
@@ -88,8 +94,10 @@ def get_related_companies(ticker_or_name):
             peer_data = _PEER_METADATA_CACHE[peer_symbol].copy()
         else:
             try:
-                peer_stock = yf.Ticker(peer_symbol)
-                peer_info = peer_stock.info
+                def fetch_peer_info():
+                    return yf.Ticker(peer_symbol).info
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    peer_info = executor.submit(fetch_peer_info).result(timeout=5.0)
                 
                 if peer_info and 'longName' in peer_info:
                     sector = peer_info.get("sector", "N/A")
@@ -118,7 +126,8 @@ def get_related_companies(ticker_or_name):
                     _PEER_METADATA_CACHE[peer_symbol] = peer_data.copy()
                 else:
                     raise ValueError("Missing name")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to fetch info for peer {peer_symbol}: {e}")
                 peer_data = {
                     "ticker": peer_symbol,
                     "name": peer_symbol,
@@ -142,7 +151,8 @@ def get_related_companies(ticker_or_name):
                 peer_data["recommendation"] = None
                 peer_data["ai_score"] = None
                 peer_data["risk_level"] = None
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to fetch report for peer {peer_symbol}: {e}")
             peer_data["recommendation"] = None
             peer_data["ai_score"] = None
             peer_data["risk_level"] = None

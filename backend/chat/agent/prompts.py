@@ -127,6 +127,10 @@ REPORT_HTML_TEMPLATE = """
             line-height: 1.55;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+            orphans: 4;
+            widows: 4;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }}
         .page {{
             width: 210mm;
@@ -656,6 +660,10 @@ COMPARISON_HTML_TEMPLATE = """<!DOCTYPE html>
             line-height: 1.5;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+            orphans: 4;
+            widows: 4;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }}
         .page {{
             width: 210mm;

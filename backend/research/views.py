@@ -37,152 +37,162 @@ class AnalyzeView(APIView):
         if not ticker_query:
             return Response({"detail": "Ticker query is required."}, status=status.HTTP_400_BAD_REQUEST)
 
+        import time
+        t0 = time.time()
+        logger.info(f"START PIPELINE: Analyze Request received for query '{ticker_query}'")
+
         try:
-            # 1. Resolve name to ticker (e.g. Reliance -> RELIANCE.NS)
-            resolved = resolve_ticker_by_name(ticker_query)
-            profile = get_company_profile(resolved)
-            company_obj = Company.objects.get(ticker=profile["ticker"])
-
-            # 2. Trigger LangGraph Pipeline
-            graph = build_research_graph()
+            from django.db import transaction
+            with transaction.atomic():
+                # 1. Resolve name to ticker (e.g. Reliance -> RELIANCE.NS)
+                resolved = resolve_ticker_by_name(ticker_query)
+                logger.info(f"PIPELINE STEP: Ticker resolved to '{resolved}' in {time.time() - t0:.2f}s")
             
-            # Create a conversation to track status and for follow-up chat
-            from chat.models import AIConversation
-            conv = AIConversation.objects.create(
-                user=request.user,
-                company=company_obj,
-                status="company_research"
-            )
+                profile = get_company_profile(resolved)
+                logger.info(f"PIPELINE STEP: Company profile fetched in {time.time() - t0:.2f}s")
             
-            initial_state = {
-                "ticker": company_obj.ticker,
-                "user_query": f"Complete investment analysis query for {company_obj.name}",
-                "user_id": request.user.id,
-                "conversation_id": str(conv.id),
-                "company_profile": profile
-            }
+                company_obj = Company.objects.get(ticker=profile["ticker"])
 
-            from django.utils import timezone
-            from django.core.files.base import ContentFile
-            import threading
-            from chat.agent.nodes import generate_pdf_background, build_report_html
+                # 2. Trigger LangGraph Pipeline
+                graph = build_research_graph()
+            
+                # Create a conversation to track status and for follow-up chat
+                from chat.models import AIConversation
+                conv = AIConversation.objects.create(
+                    user=request.user,
+                    company=company_obj,
+                    status="company_research"
+                )
+            
+                initial_state = {
+                    "ticker": company_obj.ticker,
+                    "user_query": f"Complete investment analysis query for {company_obj.name}",
+                    "user_id": request.user.id,
+                    "conversation_id": str(conv.id),
+                    "company_profile": profile
+                }
 
-            # 2b. Run LangGraph pipeline
-            result = graph.invoke(initial_state)
-            payload = result.get("recommendation_payload", {})
+                from django.utils import timezone
+                from django.core.files.base import ContentFile
+                import threading
+                from chat.agent.nodes import generate_pdf_background, build_report_html
 
-            # ── Step A: Get or create SavedReport ─────────────────────────────
-            report_id = result.get("report_id")
-            report = None
-            if report_id:
+                # 2b. Run LangGraph pipeline
+                result = graph.invoke(initial_state)
+                payload = result.get("recommendation_payload", {})
+
+                # ── Step A: Get or create SavedReport ─────────────────────────────
+                report_id = result.get("report_id")
+                report = None
+                if report_id:
+                    try:
+                        report = SavedReport.objects.get(id=report_id)
+                    except SavedReport.DoesNotExist:
+                        pass
+
+                # If save_report_node failed to create the DB record, create it now
+                if not report:
+                    try:
+                        from companies.models import Company as CompanyModel
+                        company_profile = result.get("company_profile", {}) or profile
+                        company_obj2, _ = CompanyModel.objects.get_or_create(
+                            ticker=company_obj.ticker,
+                            defaults={
+                                "name": company_obj.name,
+                                "sector": company_obj.sector,
+                                "industry": company_obj.industry,
+                                "description": company_obj.description,
+                                "financial_summary": profile,
+                            }
+                        )
+                        highlights = payload.copy()
+                        highlights["swot"] = result.get("swot", {})
+                        highlights["risks"] = result.get("risks", [])
+                        highlights["related_tickers"] = result.get("related_tickers", [])
+                        highlights["news_list"] = result.get("news_list", [])
+                        highlights["financials"] = result.get("financials", {})
+                        report = SavedReport.objects.create(
+                            user=request.user,
+                            company=company_obj2,
+                            title=f"InvestIQ Research Report - {company_obj.ticker}",
+                            key_highlights=highlights,
+                            pdf_status="pending",
+                            analysis_started_at=timezone.now(),
+                        )
+                        logger.debug(f"Created SavedReport fallback: {report.id}")
+                    except Exception as fallback_err:
+                        logger.error(f"Fallback SavedReport creation failed: {fallback_err}")
+
+                # ── Step B: Build HTML synchronously ──────────────────────────────
+                report_html_content = None
                 try:
-                    report = SavedReport.objects.get(id=report_id)
-                except SavedReport.DoesNotExist:
-                    pass
+                    report_html_content = build_report_html(result, str(report.id) if report else "preview")
+                    logger.debug(f"build_report_html SUCCESS, length={len(report_html_content)}")
+                except Exception as html_err:
+                    logger.error(f"build_report_html FAILED: {html_err}")
 
-            # If save_report_node failed to create the DB record, create it now
-            if not report:
-                try:
-                    from companies.models import Company as CompanyModel
-                    company_profile = result.get("company_profile", {}) or profile
-                    company_obj2, _ = CompanyModel.objects.get_or_create(
-                        ticker=company_obj.ticker,
-                        defaults={
-                            "name": company_obj.name,
-                            "sector": company_obj.sector,
-                            "industry": company_obj.industry,
-                            "description": company_obj.description,
-                            "financial_summary": profile,
-                        }
-                    )
-                    highlights = payload.copy()
-                    highlights["swot"] = result.get("swot", {})
-                    highlights["risks"] = result.get("risks", [])
-                    highlights["related_tickers"] = result.get("related_tickers", [])
-                    highlights["news_list"] = result.get("news_list", [])
-                    highlights["financials"] = result.get("financials", {})
-                    report = SavedReport.objects.create(
-                        user=request.user,
-                        company=company_obj2,
-                        title=f"InvestIQ Research Report - {company_obj.ticker}",
-                        key_highlights=highlights,
-                        pdf_status="pending",
-                        analysis_started_at=timezone.now(),
-                    )
-                    logger.debug(f"Created SavedReport fallback: {report.id}")
-                except Exception as fallback_err:
-                    logger.error(f"Fallback SavedReport creation failed: {fallback_err}")
-
-            # ── Step B: Build HTML synchronously ──────────────────────────────
-            report_html_content = None
-            try:
-                report_html_content = build_report_html(result, str(report.id) if report else "preview")
-                logger.debug(f"build_report_html SUCCESS, length={len(report_html_content)}")
-            except Exception as html_err:
-                logger.error(f"build_report_html FAILED: {html_err}")
-
-            # ── Step C: Save HTML to DB + file synchronously ───────────────────
-            download_url = None
-            pdf_status_val = "generating"
-            if report and report_html_content:
-                try:
-                    report.report_html = report_html_content
-                    report.report_markdown = result.get("markdown_report", "")
+                # ── Step C: Save HTML to DB + file synchronously ───────────────────
+                download_url = None
+                pdf_status_val = "generating"
+                if report and report_html_content:
+                    try:
+                        report.report_html = report_html_content
+                        report.report_markdown = result.get("markdown_report", "")
+                        report.analysis_completed_at = timezone.now()
+                        # Write the HTML file immediately (synchronous)
+                        filename = f"{company_obj.ticker}_report.html"
+                        report.pdf_file.save(
+                            filename,
+                            ContentFile(report_html_content.encode("utf-8")),
+                            save=False,
+                        )
+                        report.pdf_status = "ready"
+                        report.pdf_generated_at = timezone.now()
+                        report.save()
+                        download_url = report.pdf_file.url
+                        pdf_status_val = "ready"
+                        logger.debug(f"PDF file saved synchronously: {download_url}")
+                    except Exception as save_err:
+                        logger.error(f"Synchronous PDF save failed: {save_err}")
+                        # Fall back to background thread
+                        if report:
+                            t = threading.Thread(target=generate_pdf_background, args=(str(report.id), result))
+                            t.daemon = True
+                            t.start()
+                            pdf_status_val = "generating"
+                elif report:
                     report.analysis_completed_at = timezone.now()
-                    # Write the HTML file immediately (synchronous)
-                    filename = f"{company_obj.ticker}_report.html"
-                    report.pdf_file.save(
-                        filename,
-                        ContentFile(report_html_content.encode("utf-8")),
-                        save=False,
-                    )
-                    report.pdf_status = "ready"
-                    report.pdf_generated_at = timezone.now()
                     report.save()
-                    download_url = report.pdf_file.url
-                    pdf_status_val = "ready"
-                    logger.debug(f"PDF file saved synchronously: {download_url}")
-                except Exception as save_err:
-                    logger.error(f"Synchronous PDF save failed: {save_err}")
-                    # Fall back to background thread
-                    if report:
-                        t = threading.Thread(target=generate_pdf_background, args=(str(report.id), result))
-                        t.daemon = True
-                        t.start()
-                        pdf_status_val = "generating"
-            elif report:
-                report.analysis_completed_at = timezone.now()
-                report.save()
-                t = threading.Thread(target=generate_pdf_background, args=(str(report.id), result))
-                t.daemon = True
-                t.start()
+                    t = threading.Thread(target=generate_pdf_background, args=(str(report.id), result))
+                    t.daemon = True
+                    t.start()
 
-            return Response({
-                "conversation_id": str(conv.id),
-                "report_id": str(report.id) if report else None,
-                "ticker": company_obj.ticker,
-                "name": company_obj.name,
-                "sector": company_obj.sector,
-                "industry": company_obj.industry,
-                "description": company_obj.description,
-                "financial_summary": company_obj.financial_summary,
-                "verdict": payload.get("recommendation"),
-                "overall_score": payload.get("ai_score"),
-                "confidence": payload.get("confidence"),
-                "risk_level": payload.get("risk_level"),
-                "horizon": payload.get("investment_horizon"),
-                "scores": payload.get("scores"),
-                "top_reasons": payload.get("top_reasons"),
-                "major_risks": payload.get("major_risks"),
-                "future_outlook": payload.get("future_outlook"),
-                "reasoning": payload.get("reasoning"),
-                "report_markdown": result.get("markdown_report", ""),
-                "report_html": report_html_content,
-                "pdf_status": pdf_status_val,
-                "html_url": download_url,
-                "ratios": result.get("financials", {}).get("ratios", {}),
-                "preprocessed_metrics": result.get("financials", {}).get("preprocessed_metrics", {}),
-            }, status=status.HTTP_200_OK)
+                return Response({
+                    "conversation_id": str(conv.id),
+                    "report_id": str(report.id) if report else None,
+                    "ticker": company_obj.ticker,
+                    "name": company_obj.name,
+                    "sector": company_obj.sector,
+                    "industry": company_obj.industry,
+                    "description": company_obj.description,
+                    "financial_summary": company_obj.financial_summary,
+                    "verdict": payload.get("recommendation"),
+                    "overall_score": payload.get("ai_score"),
+                    "confidence": payload.get("confidence"),
+                    "risk_level": payload.get("risk_level"),
+                    "horizon": payload.get("investment_horizon"),
+                    "scores": payload.get("scores"),
+                    "top_reasons": payload.get("top_reasons"),
+                    "major_risks": payload.get("major_risks"),
+                    "future_outlook": payload.get("future_outlook"),
+                    "reasoning": payload.get("reasoning"),
+                    "report_markdown": result.get("markdown_report", ""),
+                    "report_html": report_html_content,
+                    "pdf_status": pdf_status_val,
+                    "html_url": download_url,
+                    "ratios": result.get("financials", {}).get("ratios", {}),
+                    "preprocessed_metrics": result.get("financials", {}).get("preprocessed_metrics", {}),
+                }, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"API Analyze error: {str(e)}")

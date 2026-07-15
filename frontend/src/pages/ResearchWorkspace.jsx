@@ -1537,7 +1537,7 @@ function PdfPreviewModal({ ticker, htmlUrl, reportHtml, pdfStatus, reportData, o
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────
 export default function ResearchWorkspace() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate       = useNavigate();
   const { success, error: toastError, info } = useToast();
 
@@ -1555,6 +1555,8 @@ export default function ResearchWorkspace() {
 
   const pollRef    = useRef(null);
   const nodeTimRef = useRef(null);
+  const pdfPollRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   const updateActiveStep = useCallback((nodeName) => {
     const targetIdx = getStepIndex(nodeName);
@@ -1603,7 +1605,13 @@ export default function ResearchWorkspace() {
     if (nodeTimRef.current) { clearInterval(nodeTimRef.current); nodeTimRef.current = null; }
   }, []);
 
-  useEffect(() => () => stopPoll(), [stopPoll]);
+  useEffect(() => {
+    return () => {
+      stopPoll();
+      if (pdfPollRef.current) clearInterval(pdfPollRef.current);
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
+  }, [stopPoll]);
 
   // Live timer tick logic for active steps (100ms interval)
   useEffect(() => {
@@ -1646,6 +1654,13 @@ export default function ResearchWorkspace() {
     setStepsState(initialSteps);
     
     stopPoll();
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
+    console.log(`[ResearchWorkspace] Started analysis for ticker: ${q}`);
+    console.log(`[ResearchWorkspace] API Endpoint: POST /api/research/analyze/ (via researchService.analyze)`);
 
     // Fallback timer in case real status poll doesn't fire fast enough
     let idx = 0;
@@ -1662,7 +1677,8 @@ export default function ResearchWorkspace() {
     startStatusPoll();
 
     try {
-      const data = await researchService.analyze(q);
+      const data = await researchService.analyze(q, { signal: abortControllerRef.current.signal });
+      console.log(`[ResearchWorkspace] Analysis completed successfully for ${q}`, data);
       stopPoll();
       
       const t_analysis = performance.now();
@@ -1691,12 +1707,12 @@ export default function ResearchWorkspace() {
       const reportId = data.report_id;
       if (reportId && data.pdf_status !== 'ready') {
         let attempts = 0;
-        const pdfPollInterval = setInterval(async () => {
+        pdfPollRef.current = setInterval(async () => {
           attempts++;
           try {
             const statusData = await researchService.checkReportStatus(reportId);
             if (statusData.status === 'ready') {
-              clearInterval(pdfPollInterval);
+              clearInterval(pdfPollRef.current);
               
               setStepsState(prev => {
                 if (!prev.length) return prev;
@@ -1712,7 +1728,7 @@ export default function ResearchWorkspace() {
               setAnalysisState('done');
               success('Investment report generated successfully.');
             } else if (statusData.status === 'failed') {
-              clearInterval(pdfPollInterval);
+              clearInterval(pdfPollRef.current);
               setStepsState(prev => {
                 if (!prev.length) return prev;
                 let updated = [...prev];
@@ -1725,7 +1741,7 @@ export default function ResearchWorkspace() {
             }
           } catch {
             if (attempts > 30) {
-              clearInterval(pdfPollInterval);
+              clearInterval(pdfPollRef.current);
               toastError('PDF polling timed out.');
             }
           }
@@ -1749,9 +1765,12 @@ export default function ResearchWorkspace() {
         setIsFavorite((favs||[]).some(f => f.company_details?.ticker === data.ticker));
       } catch { /* ignore */ }
     } catch (err) {
-      stopPoll();
+      const errMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Analysis failed. Please try again.';
+      console.error(`[ResearchWorkspace] Analysis error for ${q}:`, err, errMsg);
       setAnalysisState('error');
-      toastError(err?.response?.data?.detail || 'Analysis failed. Please try again.');
+      toastError(errMsg);
+    } finally {
+      stopPoll();
     }
   }, [startStatusPoll, stopPoll, success, toastError, updateActiveStep]);
 
@@ -1770,17 +1789,17 @@ export default function ResearchWorkspace() {
         try {
           const statusData = await researchService.checkReportStatus(reportId);
           if (statusData.status === 'ready') {
-            clearInterval(pdfPollInterval);
+            clearInterval(pdfPollRef.current);
             setResult(prev => prev ? { ...prev, pdf_status: 'ready', html_url: statusData.html_url } : prev);
             success('Investment report generated successfully.');
           } else if (statusData.status === 'failed') {
-            clearInterval(pdfPollInterval);
+            clearInterval(pdfPollRef.current);
             setResult(prev => prev ? { ...prev, pdf_status: 'failed' } : prev);
             toastError('PDF report generation failed again.');
           }
         } catch (e) {
           if (attempts > 30) {
-            clearInterval(pdfPollInterval);
+            clearInterval(pdfPollRef.current);
             toastError('PDF polling timed out.');
           }
         }

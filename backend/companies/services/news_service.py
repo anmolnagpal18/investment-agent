@@ -50,8 +50,14 @@ def get_company_news(ticker_or_name):
         raise ValidationError("Ticker or company name cannot be resolved.")
 
     try:
-        stock = yf.Ticker(ticker)
-        raw_news = stock.news
+        import concurrent.futures
+        def fetch_news():
+            stock = yf.Ticker(ticker)
+            return stock.news
+            
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(fetch_news)
+            raw_news = future.result(timeout=10.0)
 
         if not raw_news:
             return []

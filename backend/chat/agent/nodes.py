@@ -70,7 +70,42 @@ def make_unicode_bar(score):
     return "█" * blocks + "░" * (10 - blocks)
 
 
+import time
+import concurrent.futures
+
+def timed_node(node_func):
+    """
+    Decorator to wrap LangGraph nodes with logging, timing, and a 20-second timeout.
+    """
+    def wrapper(state: AgentState) -> dict:
+        node_name = node_func.__name__
+        logger.info(f"START NODE: {node_name} for ticker {state.get('ticker', 'unknown')}")
+        t0 = time.time()
+        
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(node_func, state)
+                result = future.result(timeout=25.0) # Using 25s limit for LLMs
+                
+            t1 = time.time()
+            elapsed = t1 - t0
+            logger.info(f"END NODE: {node_name} | Execution time: {elapsed:.2f} sec")
+            return result
+        except concurrent.futures.TimeoutError:
+            t1 = time.time()
+            elapsed = t1 - t0
+            logger.warning(f"TIMEOUT: {node_name} exceeded limit ({elapsed:.2f} sec). Aborting.")
+            return {"errors": state.get("errors", []) + [f"{node_name} timed out."]}
+        except Exception as e:
+            t1 = time.time()
+            logger.exception(f"ERROR: {node_name} failed after {t1 - t0:.2f} sec: {e}")
+            return {"errors": state.get("errors", []) + [f"{node_name} failed: {str(e)}"]}
+            
+    return wrapper
+
+
 # 1. Initialize State Node
+@timed_node
 def initialize_state_node(state: AgentState) -> dict:
     """
     Validates input parameters and prepares the state dict.
@@ -93,6 +128,7 @@ def initialize_state_node(state: AgentState) -> dict:
 
 
 # 2. Company Research Node
+@timed_node
 def company_research_node(state: AgentState) -> dict:
     """
     Queries and resolves stock metadata profile details.
@@ -110,6 +146,7 @@ def company_research_node(state: AgentState) -> dict:
 
 
 # 3. Financial Analysis Node
+@timed_node
 def financial_analysis_node(state: AgentState) -> dict:
     """
     Queries financial ratio indicators and statement sheets.
@@ -124,6 +161,7 @@ def financial_analysis_node(state: AgentState) -> dict:
 
 
 # 4. Metrics Calculation Node
+@timed_node
 def metrics_calculation_node(state: AgentState) -> dict:
     """
     Calculates margins, growth rates, leverage ratios.
@@ -135,6 +173,7 @@ def metrics_calculation_node(state: AgentState) -> dict:
 
 
 # 5. Scores Calculation Node
+@timed_node
 def scores_calculation_node(state: AgentState) -> dict:
     """
     Calculates Financial Health, Growth, Valuation, Risk Safety, and News Sentiment
@@ -503,6 +542,7 @@ def scores_calculation_node(state: AgentState) -> dict:
 
 
 # 6. News Analysis Node
+@timed_node
 def news_analysis_node(state: AgentState) -> dict:
     """
     Gathers news stories and computes sentiment indicators.
@@ -517,6 +557,7 @@ def news_analysis_node(state: AgentState) -> dict:
 
 
 # 7. Risk Analysis Node
+@timed_node
 def risk_analysis_node(state: AgentState) -> dict:
     """
     Queries Gemini 2.5 Flash to identify critical risk dimensions.
@@ -655,6 +696,7 @@ def sanitize_swot(swot, profile, financials, ticker, news_sentiment="Neutral"):
 
 
 # 8. SWOT Analysis Node
+@timed_node
 def swot_analysis_node(state: AgentState) -> dict:
     """
     Queries Gemini 2.5 Flash to build strategic SWOT matrices.
@@ -693,6 +735,7 @@ def swot_analysis_node(state: AgentState) -> dict:
 
 
 # 9. Recommendation Thesis Node
+@timed_node
 def recommendation_thesis_node(state: AgentState) -> dict:
     """
     Queries Gemini to write institutional-grade justifications, strengths,
@@ -756,6 +799,7 @@ def recommendation_thesis_node(state: AgentState) -> dict:
         }
 
 
+@timed_node
 def report_generator_node(state: AgentState) -> dict:
     """
     Saves the SavedReport in the database with status 'pending' and logs research history.
