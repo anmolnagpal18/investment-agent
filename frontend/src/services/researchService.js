@@ -12,7 +12,7 @@ export const researchService = {
         });
         return response.data;
       } catch (error) {
-        if (axios.isCancel(error) || error.name === 'CanceledError') {
+        if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || (axios && typeof axios.isCancel === 'function' && axios.isCancel(error))) {
           throw error; // Don't retry cancelled requests
         }
         attempt++;
