@@ -1,3 +1,4 @@
+import axios from 'axios';
 import api from './api';
 
 export const researchService = {
@@ -11,7 +12,7 @@ export const researchService = {
         });
         return response.data;
       } catch (error) {
-        if (api.isCancel(error) || error.name === 'CanceledError') {
+        if (axios.isCancel(error) || error.name === 'CanceledError') {
           throw error; // Don't retry cancelled requests
         }
         attempt++;
