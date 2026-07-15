@@ -63,8 +63,16 @@ def get_company_profile(ticker_or_name):
         
     # Cache miss or stale cache: Query Yahoo Finance
     try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
+        import concurrent.futures
+        
+        def fetch_info():
+            stock = yf.Ticker(ticker)
+            return stock.info
+            
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(fetch_info)
+            # Timeout after 5 seconds to prevent indefinite hanging
+            info = future.result(timeout=8.0)
         
         # Verify yfinance returned valid data
         if not info or 'longName' not in info:

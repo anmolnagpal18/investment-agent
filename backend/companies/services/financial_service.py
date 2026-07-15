@@ -36,8 +36,22 @@ def get_financial_data(ticker_or_name):
         raise ValidationError("Ticker or company name cannot be resolved.")
 
     try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
+        import concurrent.futures
+        
+        def fetch_financials():
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            fin = stock.financials if (stock.financials is not None and not stock.financials.empty) else getattr(stock, 'income_stmt', None)
+            bs = stock.balance_sheet if (stock.balance_sheet is not None and not stock.balance_sheet.empty) else getattr(stock, 'balance_sheet', None)
+            cf = stock.cashflow if (stock.cashflow is not None and not stock.cashflow.empty) else getattr(stock, 'cashflow', None)
+            q_fin = stock.quarterly_financials if (stock.quarterly_financials is not None and not stock.quarterly_financials.empty) else getattr(stock, 'quarterly_income_stmt', None)
+            q_bs = stock.quarterly_balance_sheet if (stock.quarterly_balance_sheet is not None and not stock.quarterly_balance_sheet.empty) else getattr(stock, 'quarterly_balance_sheet', None)
+            q_cf = stock.quarterly_cashflow if (stock.quarterly_cashflow is not None and not stock.quarterly_cashflow.empty) else getattr(stock, 'quarterly_cashflow', None)
+            return info, fin, bs, cf, q_fin, q_bs, q_cf
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(fetch_financials)
+            info, fin, bs, cf, q_fin, q_bs, q_cf = future.result(timeout=12.0)
 
         if not info or 'marketCap' not in info:
             raise ValidationError(f"No financial data available for symbol '{ticker}'.")
@@ -64,16 +78,6 @@ def get_financial_data(ticker_or_name):
             "operating_margin": info.get("operatingMargins") or 0.0,
             "beta": info.get("beta") or 1.0,
         }
-
-        # Pull statements with robust attribute and empty fallbacks
-        fin = stock.financials if (stock.financials is not None and not stock.financials.empty) else getattr(stock, 'income_stmt', None)
-        bs = stock.balance_sheet if (stock.balance_sheet is not None and not stock.balance_sheet.empty) else getattr(stock, 'balance_sheet', None)
-        cf = stock.cashflow if (stock.cashflow is not None and not stock.cashflow.empty) else getattr(stock, 'cashflow', None)
-        
-        q_fin = stock.quarterly_financials if (stock.quarterly_financials is not None and not stock.quarterly_financials.empty) else getattr(stock, 'quarterly_income_stmt', None)
-        q_bs = stock.quarterly_balance_sheet if (stock.quarterly_balance_sheet is not None and not stock.quarterly_balance_sheet.empty) else getattr(stock, 'quarterly_balance_sheet', None)
-        q_cf = stock.quarterly_cashflow if (stock.quarterly_cashflow is not None and not stock.quarterly_cashflow.empty) else getattr(stock, 'quarterly_cashflow', None)
-
 
         # 1. Parse Yearly Historical Metrics
         historical_yearly = []
