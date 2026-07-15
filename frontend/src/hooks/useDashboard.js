@@ -40,7 +40,7 @@ export function useDashboard() {
 
       // Poll agent status from last conversation
       try {
-        const convRes = await api.get('/chat/conversations/');
+        const convRes = await api.get('/chat/threads/');
         const conversations = convRes.data?.results || convRes.data || [];
         const latest = conversations[0];
         if (latest) {

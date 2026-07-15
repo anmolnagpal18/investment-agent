@@ -1544,6 +1544,7 @@ export default function ResearchWorkspace() {
   const [query,         setQuery]         = useState(searchParams.get('q')||'');
   const [analysisState, setAnalysisState] = useState(null); // null|'loading'|'done'|'error'
   const [stepsState,    setStepsState]    = useState([]);
+  const [activeNode,    setActiveNode]    = useState(null);
   const [result,        setResult]        = useState(null);
   const [isFavorite,    setIsFavorite]    = useState(false);
   const [favLoading,    setFavLoading]    = useState(false);
@@ -1589,7 +1590,7 @@ export default function ResearchWorkspace() {
   const startStatusPoll = useCallback(() => {
     pollRef.current = setInterval(async () => {
       try {
-        const res = await api.get('/chat/conversations/');
+        const res = await api.get('/chat/threads/');
         const convs = res.data?.results || res.data || [];
         const latest = convs[0];
         if (latest?.status && latest.status !== 'completed') {

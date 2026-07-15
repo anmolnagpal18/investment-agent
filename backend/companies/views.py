@@ -58,7 +58,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         try:
             data = get_dashboard_news()
             if data is None:
-                return Response({"detail": "Unable to fetch dashboard news feed"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response([], status=status.HTTP_200_OK)
             return Response(data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
